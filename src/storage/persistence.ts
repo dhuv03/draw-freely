@@ -4,7 +4,7 @@
 
 import { openDB, type IDBPDatabase } from 'idb';
 import type { ExcalidrawElement, Viewport } from '../types';
-import { renderElement, getElementBounds } from '../renderer/renderElement';
+import { renderElement, getElementBounds, getArrowGeometry } from '../renderer/renderElement';
 import rough from 'roughjs';
 
 // ── IndexedDB ────────────────────────────────
@@ -232,13 +232,161 @@ export function exportSVG(elements: ExcalidrawElement[], theme: 'light' | 'dark'
         break;
       }
       case 'line':
-      case 'arrow':
-        node = rc.line(el.x, el.y, el.x + el.width, el.y + el.height, opts);
+        if (el.points && el.points.length > 0) {
+          const globalPoints = el.points.map(([px, py]) => [el.x + px, el.y + py] as [number, number]);
+          node = rc.linearPath(globalPoints, opts);
+        } else {
+          node = rc.line(el.x, el.y, el.x + el.width, el.y + el.height, opts);
+        }
         break;
+      case 'arrow': {
+        const arrowType = el.arrowType || 'straight';
+        if (arrowType === 'curved') {
+          const w = el.width, h = el.height;
+          const L = Math.hypot(w, h);
+          if (L < 1) {
+            node = rc.line(el.x, el.y, el.x + w, el.y + h, opts);
+          } else {
+            let cx = 0, cy = 0, endX = w, endY = h;
+            const headSize = Math.min(L * 0.25, Math.max(12, el.strokeWidth * 5));
+            const shorten = headSize * 0.8;
+            if (el.points && el.points.length === 3) {
+              const p0 = el.points[0];
+              const p1 = el.points[1];
+              const p2 = el.points[2];
+              cx = 2 * p1[0] - 0.5 * p0[0] - 0.5 * p2[0];
+              cy = 2 * p1[1] - 0.5 * p0[1] - 0.5 * p2[1];
+              const theta = Math.atan2(p2[1] - cy, p2[0] - cx);
+              endX = p2[0] - shorten * Math.cos(theta);
+              endY = p2[1] - shorten * Math.sin(theta);
+            } else {
+              const curvature = el.curvature !== undefined ? el.curvature : (L * 0.2);
+              cx = w / 2 - (h / L) * curvature;
+              cy = h / 2 + (w / L) * curvature;
+              const theta = Math.atan2(h - cy, w - cx);
+              endX = w - shorten * Math.cos(theta);
+              endY = h - shorten * Math.sin(theta);
+            }
+            const path = `M ${el.x} ${el.y} Q ${el.x + cx} ${el.y + cy} ${el.x + endX} ${el.y + endY}`;
+            node = rc.path(path, opts);
+          }
+        } else if (arrowType === 'elbow') {
+          const w = el.width, h = el.height;
+          const L = Math.hypot(w, h);
+          if (L < 1) {
+            node = rc.line(el.x, el.y, el.x + w, el.y + h, opts);
+          } else {
+            const headSize = Math.min(L * 0.25, Math.max(12, el.strokeWidth * 5));
+            const shorten = headSize * 0.9;
+            
+            let points: [number, number][];
+            if (Math.abs(w) > Math.abs(h)) {
+              const lastPointX = w - Math.sign(w) * shorten;
+              points = [
+                [0, 0],
+                [w / 2, 0],
+                [w / 2, h],
+                [lastPointX, h]
+              ];
+            } else {
+              const lastPointY = h - Math.sign(h) * shorten;
+              points = [
+                [0, 0],
+                [0, h / 2],
+                [w, h / 2],
+                [w, lastPointY]
+              ];
+            }
+            const globalPoints = points.map(([px, py]) => [el.x + px, el.y + py] as [number, number]);
+            node = rc.linearPath(globalPoints, opts);
+          }
+        } else {
+          // Straight Arrow
+          if (el.points && el.points.length > 1) {
+            const { lineEndX, lineEndY } = getArrowGeometry(el);
+            const globalPoints = el.points.map(([px, py]) => [el.x + px, el.y + py] as [number, number]);
+            globalPoints[globalPoints.length - 1] = [el.x + lineEndX, el.y + lineEndY];
+            node = rc.linearPath(globalPoints, opts);
+          } else {
+            node = rc.line(el.x, el.y, el.x + el.width, el.y + el.height, opts);
+          }
+        }
+        break;
+      }
+      case 'curvedarrow': {
+        const w = el.width, h = el.height;
+        const L = Math.hypot(w, h);
+        if (L < 1) {
+          node = rc.line(el.x, el.y, el.x + w, el.y + h, opts);
+        } else {
+          const curvature = el.curvature !== undefined ? el.curvature : (L * 0.2);
+          const cx = w / 2 - (h / L) * curvature;
+          const cy = h / 2 + (w / L) * curvature;
+          const theta = Math.atan2(h - cy, w - cx);
+          const headSize = Math.min(L * 0.25, Math.max(12, el.strokeWidth * 5));
+          const shorten = headSize * 0.8;
+          const endX = w - shorten * Math.cos(theta);
+          const endY = h - shorten * Math.sin(theta);
+          const path = `M ${el.x} ${el.y} Q ${el.x + cx} ${el.y + cy} ${el.x + endX} ${el.y + endY}`;
+          node = rc.path(path, opts);
+        }
+        break;
+      }
+      case 'elbowarrow': {
+        const w = el.width, h = el.height;
+        const L = Math.hypot(w, h);
+        if (L < 1) {
+          node = rc.line(el.x, el.y, el.x + w, el.y + h, opts);
+        } else {
+          const headSize = Math.min(L * 0.25, Math.max(12, el.strokeWidth * 5));
+          const shorten = headSize * 0.9;
+          
+          let points: [number, number][];
+          if (Math.abs(w) > Math.abs(h)) {
+            const lastPointX = w - Math.sign(w) * shorten;
+            points = [
+              [0, 0],
+              [w / 2, 0],
+              [w / 2, h],
+              [lastPointX, h]
+            ];
+          } else {
+            const lastPointY = h - Math.sign(h) * shorten;
+            points = [
+              [0, 0],
+              [0, h / 2],
+              [w, h / 2],
+              [w, lastPointY]
+            ];
+          }
+          const globalPoints = points.map(([px, py]) => [el.x + px, el.y + py] as [number, number]);
+          node = rc.linearPath(globalPoints, opts);
+        }
+        break;
+      }
     }
     if (node) {
       node.setAttribute('opacity', String(el.opacity / 100));
       g.appendChild(node);
+
+      if (el.type === 'arrow' || el.type === 'curvedarrow' || el.type === 'elbowarrow') {
+        const { tipX, tipY, angle, headSize } = getArrowGeometry(el);
+        if (headSize >= 1) {
+          const headAngle = Math.PI / 6;
+          const globalTipX = el.x + tipX;
+          const globalTipY = el.y + tipY;
+
+          const p1 = `${globalTipX},${globalTipY}`;
+          const p2 = `${globalTipX - headSize * Math.cos(angle - headAngle)},${globalTipY - headSize * Math.sin(angle - headAngle)}`;
+          const p3 = `${globalTipX - headSize * Math.cos(angle + headAngle)},${globalTipY - headSize * Math.sin(angle + headAngle)}`;
+
+          const arrowNode = document.createElementNS(svgNs, 'polygon');
+          arrowNode.setAttribute('points', `${p1} ${p2} ${p3}`);
+          arrowNode.setAttribute('fill', el.strokeColor);
+          arrowNode.setAttribute('opacity', String(el.opacity / 100));
+          g.appendChild(arrowNode);
+        }
+      }
     }
   }
 

@@ -8,6 +8,8 @@ export type ElementType =
   | 'diamond'
   | 'line'
   | 'arrow'
+  | 'curvedarrow'
+  | 'elbowarrow'
   | 'freedraw'
   | 'text';
 
@@ -21,6 +23,8 @@ export type Tool =
   | 'diamond'
   | 'line'
   | 'arrow'
+  | 'curvedarrow'
+  | 'elbowarrow'
   | 'freedraw'
   | 'text'
   | 'eraser'
@@ -49,6 +53,8 @@ export interface ExcalidrawElement {
   endArrowhead?: 'arrow' | null;
   seed: number;
   isDeleted?: boolean;
+  curvature?: number;
+  arrowType?: 'straight' | 'curved' | 'elbow';
 }
 
 export interface Viewport {
@@ -80,6 +86,8 @@ export interface AppState {
     future: ExcalidrawElement[][];
   };
   editingTextId: string | null;
+  editingTextClickPoint: Point | null;
+  defaultElementProps: Record<string, any>;
 }
 
 export type AppAction =
@@ -95,5 +103,6 @@ export type AppAction =
   | { type: 'REDO' }
   | { type: 'TOGGLE_THEME' }
   | { type: 'SET_THEME'; theme: 'light' | 'dark' }
-  | { type: 'SET_EDITING_TEXT'; id: string | null }
+  | { type: 'SET_EDITING_TEXT'; id: string | null; clickPoint?: Point | null }
+  | { type: 'UPDATE_DEFAULT_PROPS'; updates: Record<string, any> }
   | { type: 'CLEAR_CANVAS' };

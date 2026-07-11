@@ -77,6 +77,7 @@ const tools: ToolDef[] = [
       </svg>
     ),
   },
+
   {
     id: 'line',
     label: 'Line',

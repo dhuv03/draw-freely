@@ -4,7 +4,7 @@
 
 import React, { createContext, useContext, useReducer, type Dispatch } from 'react';
 import type { AppState, AppAction } from './types';
-import { HISTORY_LIMIT } from './constants';
+import { HISTORY_LIMIT, DEFAULT_ELEMENT_PROPS } from './constants';
 
 // ── Initial State ────────────────────────────
 export const initialState: AppState = {
@@ -15,6 +15,8 @@ export const initialState: AppState = {
   theme: 'light',
   history: { past: [], future: [] },
   editingTextId: null,
+  editingTextClickPoint: null,
+  defaultElementProps: { ...DEFAULT_ELEMENT_PROPS, arrowType: 'straight' },
 };
 
 // ── Reducer ──────────────────────────────────
@@ -116,7 +118,20 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       return { ...state, theme: action.theme };
 
     case 'SET_EDITING_TEXT':
-      return { ...state, editingTextId: action.id };
+      return {
+        ...state,
+        editingTextId: action.id,
+        editingTextClickPoint: action.clickPoint || null,
+      };
+
+    case 'UPDATE_DEFAULT_PROPS':
+      return {
+        ...state,
+        defaultElementProps: {
+          ...state.defaultElementProps,
+          ...action.updates,
+        },
+      };
 
     case 'CLEAR_CANVAS':
       return {

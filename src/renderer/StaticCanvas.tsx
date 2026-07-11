@@ -64,6 +64,7 @@ export const StaticCanvas = forwardRef<StaticCanvasHandle, StaticCanvasProps>(
       // Render committed elements
       for (const el of elements) {
         if (el.isDeleted) continue;
+        if (el.id === stateRef.current.editingTextId) continue;
         renderElement(ctx, el, rc);
       }
 

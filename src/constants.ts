@@ -41,6 +41,8 @@ export const KEYBOARD_SHORTCUTS: Record<string, string> = {
   e: 'ellipse',
   d: 'diamond',
   a: 'arrow',
+  c: 'curvedarrow',
+  q: 'elbowarrow',
   l: 'line',
   p: 'freedraw',
   t: 'text',

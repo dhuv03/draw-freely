@@ -32,8 +32,21 @@ export function hitTest(el: ExcalidrawElement, point: Point): boolean {
     case 'diamond':
       return hitTestDiamond(el, point, threshold);
     case 'line':
-    case 'arrow':
       return hitTestLine(el, point, threshold);
+    case 'arrow': {
+      const arrowType = el.arrowType || 'straight';
+      if (arrowType === 'curved') {
+        return hitTestCurvedArrow(el, point, threshold);
+      } else if (arrowType === 'elbow') {
+        return hitTestElbowArrow(el, point, threshold);
+      } else {
+        return hitTestLine(el, point, threshold);
+      }
+    }
+    case 'curvedarrow':
+      return hitTestCurvedArrow(el, point, threshold);
+    case 'elbowarrow':
+      return hitTestElbowArrow(el, point, threshold);
     case 'freedraw':
       return hitTestFreedraw(el, point, threshold);
     case 'text':
@@ -125,9 +138,97 @@ function hitTestDiamond(
 function hitTestLine(
   el: ExcalidrawElement, p: Point, t: number,
 ): boolean {
+  if (el.points && el.points.length > 0) {
+    for (let i = 1; i < el.points.length; i++) {
+      const a: Point = { x: el.x + el.points[i - 1][0], y: el.y + el.points[i - 1][1] };
+      const b: Point = { x: el.x + el.points[i][0], y: el.y + el.points[i][1] };
+      if (isNearSegment(p, a, b, t)) return true;
+    }
+    return false;
+  }
   const start: Point = { x: el.x, y: el.y };
   const end: Point = { x: el.x + el.width, y: el.y + el.height };
   return isNearSegment(p, start, end, t);
+}
+
+function hitTestCurvedArrow(el: ExcalidrawElement, p: Point, t: number): boolean {
+  const w = el.width;
+  const h = el.height;
+  const L = Math.hypot(w, h);
+  if (L < 1) return false;
+
+  let cx = 0;
+  let cy = 0;
+  let endX = w;
+  let endY = h;
+
+  if (el.points && el.points.length === 3) {
+    const p0 = el.points[0];
+    const p1 = el.points[1];
+    const p2 = el.points[2];
+    cx = 2 * p1[0] - 0.5 * p0[0] - 0.5 * p2[0];
+    cy = 2 * p1[1] - 0.5 * p0[1] - 0.5 * p2[1];
+    endX = p2[0];
+    endY = p2[1];
+  } else {
+    const curvature = el.curvature !== undefined ? el.curvature : (L * 0.2);
+    cx = w / 2 - (h / L) * curvature;
+    cy = h / 2 + (w / L) * curvature;
+  }
+
+  let prevX = el.x;
+  let prevY = el.y;
+
+  for (let i = 1; i <= 10; i++) {
+    const tVal = i / 10;
+    const mt = 1 - tVal;
+    const x = mt * mt * el.x + 2 * mt * tVal * (el.x + cx) + tVal * tVal * (el.x + endX);
+    const y = mt * mt * el.y + 2 * mt * tVal * (el.y + cy) + tVal * tVal * (el.y + endY);
+    if (isNearSegment(p, { x: prevX, y: prevY }, { x, y }, t)) {
+      return true;
+    }
+    prevX = x;
+    prevY = y;
+  }
+  return false;
+}
+
+function hitTestElbowArrow(el: ExcalidrawElement, p: Point, t: number): boolean {
+  const w = el.width;
+  const h = el.height;
+  const L = Math.hypot(w, h);
+  if (L < 1) return false;
+
+  const headSize = Math.min(L * 0.25, Math.max(12, el.strokeWidth * 5));
+  const shorten = headSize * 0.9;
+  
+  let points: [number, number][];
+  if (Math.abs(w) > Math.abs(h)) {
+    const lastPointX = w - Math.sign(w) * shorten;
+    points = [
+      [0, 0],
+      [w / 2, 0],
+      [w / 2, h],
+      [lastPointX, h]
+    ];
+  } else {
+    const lastPointY = h - Math.sign(h) * shorten;
+    points = [
+      [0, 0],
+      [0, h / 2],
+      [w, h / 2],
+      [w, lastPointY]
+    ];
+  }
+
+  for (let i = 1; i < points.length; i++) {
+    const p1 = { x: el.x + points[i - 1][0], y: el.y + points[i - 1][1] };
+    const p2 = { x: el.x + points[i][0], y: el.y + points[i][1] };
+    if (isNearSegment(p, p1, p2, t)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 // ── Freedraw ─────────────────────────────────
@@ -148,9 +249,10 @@ function hitTestFreedraw(
 // ── Text ─────────────────────────────────────
 function hitTestText(el: ExcalidrawElement, p: Point): boolean {
   const bounds = getElementBounds(el);
+  const padding = 8; // generous click padding for text
   return (
-    p.x >= bounds.x && p.x <= bounds.x + bounds.width &&
-    p.y >= bounds.y && p.y <= bounds.y + bounds.height
+    p.x >= bounds.x - padding && p.x <= bounds.x + bounds.width + padding &&
+    p.y >= bounds.y - padding && p.y <= bounds.y + bounds.height + padding
   );
 }
 
@@ -181,18 +283,19 @@ export function hitTestResizeHandles(
   bounds: { x: number; y: number; width: number; height: number },
   point: Point,
   zoom: number,
+  isText?: boolean,
 ): ResizeHandle | null {
   const hs = HANDLE_SIZE / zoom; // Handle size in canvas coordinates
 
   const handles: { handle: ResizeHandle; x: number; y: number }[] = [
-    { handle: 'nw', x: bounds.x, y: bounds.y },
-    { handle: 'n', x: bounds.x + bounds.width / 2, y: bounds.y },
-    { handle: 'ne', x: bounds.x + bounds.width, y: bounds.y },
-    { handle: 'e', x: bounds.x + bounds.width, y: bounds.y + bounds.height / 2 },
-    { handle: 'se', x: bounds.x + bounds.width, y: bounds.y + bounds.height },
-    { handle: 's', x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height },
-    { handle: 'sw', x: bounds.x, y: bounds.y + bounds.height },
-    { handle: 'w', x: bounds.x, y: bounds.y + bounds.height / 2 },
+    { handle: 'nw' as ResizeHandle, x: bounds.x, y: bounds.y },
+    ...(isText ? [] : [{ handle: 'n' as ResizeHandle, x: bounds.x + bounds.width / 2, y: bounds.y }]),
+    { handle: 'ne' as ResizeHandle, x: bounds.x + bounds.width, y: bounds.y },
+    { handle: 'e' as ResizeHandle, x: bounds.x + bounds.width, y: bounds.y + bounds.height / 2 },
+    { handle: 'se' as ResizeHandle, x: bounds.x + bounds.width, y: bounds.y + bounds.height },
+    ...(isText ? [] : [{ handle: 's' as ResizeHandle, x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height }]),
+    { handle: 'sw' as ResizeHandle, x: bounds.x, y: bounds.y + bounds.height },
+    { handle: 'w' as ResizeHandle, x: bounds.x, y: bounds.y + bounds.height / 2 },
   ];
 
   for (const { handle, x, y } of handles) {
