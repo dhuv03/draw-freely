@@ -1,0 +1,162 @@
+// ──────────────────────────────────────────────
+// DrawFreely — App Context + State Reducer
+// ──────────────────────────────────────────────
+
+import React, { createContext, useContext, useReducer, type Dispatch } from 'react';
+import type { AppState, AppAction } from './types';
+import { HISTORY_LIMIT } from './constants';
+
+// ── Initial State ────────────────────────────
+export const initialState: AppState = {
+  elements: [],
+  selectedElementIds: [],
+  activeTool: 'select',
+  viewport: { zoom: 1, scrollX: 0, scrollY: 0 },
+  theme: 'light',
+  history: { past: [], future: [] },
+  editingTextId: null,
+};
+
+// ── Reducer ──────────────────────────────────
+export function appReducer(state: AppState, action: AppAction): AppState {
+  switch (action.type) {
+    case 'ADD_ELEMENT':
+      return { ...state, elements: [...state.elements, action.element] };
+
+    case 'UPDATE_ELEMENT':
+      return {
+        ...state,
+        elements: state.elements.map((el) =>
+          el.id === action.id ? { ...el, ...action.updates } : el,
+        ),
+      };
+
+    case 'DELETE_ELEMENTS':
+      return {
+        ...state,
+        elements: state.elements.filter((el) => !action.ids.includes(el.id)),
+        selectedElementIds: state.selectedElementIds.filter(
+          (id) => !action.ids.includes(id),
+        ),
+      };
+
+    case 'SET_ELEMENTS':
+      return { ...state, elements: action.elements };
+
+    case 'SET_TOOL':
+      return {
+        ...state,
+        activeTool: action.tool,
+        // Clear selection when switching away from select
+        selectedElementIds:
+          action.tool !== 'select' ? [] : state.selectedElementIds,
+      };
+
+    case 'SET_VIEWPORT':
+      return {
+        ...state,
+        viewport: { ...state.viewport, ...action.viewport },
+      };
+
+    case 'SET_SELECTION':
+      return { ...state, selectedElementIds: action.ids };
+
+    case 'SNAPSHOT': {
+      const past = [
+        ...state.history.past,
+        state.elements.map((el) => ({ ...el })),
+      ];
+      if (past.length > HISTORY_LIMIT) past.shift();
+      return { ...state, history: { past, future: [] } };
+    }
+
+    case 'UNDO': {
+      if (state.history.past.length === 0) return state;
+      const past = [...state.history.past];
+      const previous = past.pop()!;
+      return {
+        ...state,
+        elements: previous,
+        selectedElementIds: [],
+        history: {
+          past,
+          future: [
+            state.elements.map((el) => ({ ...el })),
+            ...state.history.future,
+          ],
+        },
+      };
+    }
+
+    case 'REDO': {
+      if (state.history.future.length === 0) return state;
+      const future = [...state.history.future];
+      const next = future.shift()!;
+      return {
+        ...state,
+        elements: next,
+        selectedElementIds: [],
+        history: {
+          past: [
+            ...state.history.past,
+            state.elements.map((el) => ({ ...el })),
+          ],
+          future,
+        },
+      };
+    }
+
+    case 'TOGGLE_THEME':
+      return {
+        ...state,
+        theme: state.theme === 'light' ? 'dark' : 'light',
+      };
+
+    case 'SET_THEME':
+      return { ...state, theme: action.theme };
+
+    case 'SET_EDITING_TEXT':
+      return { ...state, editingTextId: action.id };
+
+    case 'CLEAR_CANVAS':
+      return {
+        ...state,
+        elements: [],
+        selectedElementIds: [],
+        history: {
+          past: [
+            ...state.history.past,
+            state.elements.map((el) => ({ ...el })),
+          ],
+          future: [],
+        },
+      };
+
+    default:
+      return state;
+  }
+}
+
+// ── Context ──────────────────────────────────
+interface AppContextType {
+  state: AppState;
+  dispatch: Dispatch<AppAction>;
+}
+
+const AppContext = createContext<AppContextType | null>(null);
+
+export function AppProvider({ children }: { children: React.ReactNode }) {
+  const [state, dispatch] = useReducer(appReducer, initialState);
+
+  return (
+    <AppContext.Provider value={{ state, dispatch }}>
+      {children}
+    </AppContext.Provider>
+  );
+}
+
+export function useAppContext() {
+  const ctx = useContext(AppContext);
+  if (!ctx) throw new Error('useAppContext must be used within AppProvider');
+  return ctx;
+}
