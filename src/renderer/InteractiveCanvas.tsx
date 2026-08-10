@@ -3,7 +3,7 @@
 // Draws selection UI: bounding boxes, resize handles, rubber band
 // ──────────────────────────────────────────────
 
-import { useRef, useEffect, useCallback, useImperativeHandle, forwardRef } from 'react';
+import { useRef, useEffect, useLayoutEffect, useCallback, useImperativeHandle, forwardRef } from 'react';
 import { useAppContext } from '../AppContext';
 import { getElementBounds } from './renderElement';
 import { HANDLE_SIZE } from '../constants';
@@ -17,7 +17,7 @@ export const InteractiveCanvas = forwardRef<InteractiveCanvasHandle, object>(
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const { state } = useAppContext();
     const stateRef = useRef(state);
-    stateRef.current = state;
+    useLayoutEffect(() => { stateRef.current = state; }, [state]);
     const rubberBandRef = useRef<{ x: number; y: number; width: number; height: number } | null>(null);
 
     const render = useCallback(() => {
@@ -108,6 +108,11 @@ export const InteractiveCanvas = forwardRef<InteractiveCanvasHandle, object>(
           } else {
             const bounds = getElementBounds(el);
             drawResizeHandles(ctx, bounds, handleSize, selColor, theme, el.type === 'text');
+            const rx = bounds.x + bounds.width / 2;
+            const ry = bounds.y - 24 / viewport.zoom;
+            ctx.beginPath(); ctx.moveTo(rx, bounds.y); ctx.lineTo(rx, ry); ctx.stroke();
+            ctx.fillStyle = theme === 'dark' ? '#1a1a2e' : '#ffffff';
+            ctx.beginPath(); ctx.arc(rx, ry, 6 / viewport.zoom, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
 
             // Draw bend handle for curved arrow
             if (el.type === 'curvedarrow') {
@@ -164,11 +169,11 @@ export const InteractiveCanvas = forwardRef<InteractiveCanvasHandle, object>(
       }
 
       ctx.restore();
-    }, [state.selectedElementIds, state.elements, state.viewport, state.theme]);
+    }, []);
 
     useEffect(() => {
       requestAnimationFrame(render);
-    }, [render]);
+    }, [render, state.selectedElementIds, state.elements, state.viewport, state.theme]);
 
     useEffect(() => {
       const onResize = () => requestAnimationFrame(render);

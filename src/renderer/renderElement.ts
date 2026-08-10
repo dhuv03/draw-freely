@@ -2,7 +2,7 @@
 // DrawFreely — Element Rendering + Shape Cache
 // ──────────────────────────────────────────────
 
-import type { ExcalidrawElement, Bounds } from '../types';
+import type { ExcalidrawElement, Bounds, Point } from '../types';
 import { getStroke } from 'perfect-freehand';
 
 // ── Shape Cache ──────────────────────────────
@@ -47,7 +47,10 @@ function getCachedDrawable(el: ExcalidrawElement, generator: any): any | null {
 
   switch (el.type) {
     case 'rectangle':
-      drawable = generator.rectangle(0, 0, el.width, el.height, opts);
+      if (el.cornerRadius) {
+        const radius = Math.min(Math.abs(el.cornerRadius), Math.abs(el.width) / 2, Math.abs(el.height) / 2);
+        drawable = generator.path(`M ${radius} 0 H ${el.width - radius} Q ${el.width} 0 ${el.width} ${radius} V ${el.height - radius} Q ${el.width} ${el.height} ${el.width - radius} ${el.height} H ${radius} Q 0 ${el.height} 0 ${el.height - radius} V ${radius} Q 0 0 ${radius} 0 Z`, opts);
+      } else drawable = generator.rectangle(0, 0, el.width, el.height, opts);
       break;
     case 'ellipse':
       drawable = generator.ellipse(
@@ -155,6 +158,11 @@ export function renderElement(
   ctx.save();
   ctx.globalAlpha = el.opacity / 100;
   ctx.translate(el.x, el.y);
+  if (el.angle) {
+    ctx.translate(el.width / 2, el.height / 2);
+    ctx.rotate(el.angle);
+    ctx.translate(-el.width / 2, -el.height / 2);
+  }
 
   if (el.type === 'freedraw') {
     renderFreedraw(ctx, el);
@@ -245,11 +253,15 @@ function renderText(ctx: CanvasRenderingContext2D, el: ExcalidrawElement) {
   ctx.font = font;
   ctx.fillStyle = el.strokeColor;
   ctx.textBaseline = 'top';
+  ctx.textAlign = el.textAlign || 'left';
 
   const lines = el.width > 30 ? wrapText(el.text, el.width, font) : el.text.split('\n');
-  const lineHeight = fontSize * 1.25;
+  const lineHeight = fontSize * (el.lineHeight || 1.25);
+  const blockHeight = lines.length * lineHeight;
+  const yOffset = el.verticalAlign === 'middle' ? (el.height - blockHeight) / 2 : el.verticalAlign === 'bottom' ? el.height - blockHeight : 0;
+  const xOffset = el.textAlign === 'center' ? el.width / 2 : el.textAlign === 'right' ? el.width : 0;
   for (let i = 0; i < lines.length; i++) {
-    ctx.fillText(lines[i], 0, i * lineHeight);
+    ctx.fillText(lines[i], xOffset, yOffset + i * lineHeight);
   }
 }
 
@@ -381,6 +393,29 @@ function drawElbowArrowhead(ctx: CanvasRenderingContext2D, el: ExcalidrawElement
 
 // ── Element Bounds ───────────────────────────
 export function getElementBounds(el: ExcalidrawElement): Bounds {
+  if (el.type === 'curvedarrow' || (el.type === 'arrow' && el.arrowType === 'curved')) {
+    const w = el.width, h = el.height, length = Math.hypot(w, h);
+    const curvature = el.curvature ?? length * 0.2;
+    const cx = length < 1 ? w / 2 : w / 2 - (h / length) * curvature;
+    const cy = length < 1 ? h / 2 : h / 2 + (w / length) * curvature;
+    const samples: Point[] = [];
+    for (let index = 0; index <= 32; index++) {
+      const t = index / 32, mt = 1 - t;
+      samples.push({ x: el.x + 2 * mt * t * cx + t * t * w, y: el.y + 2 * mt * t * cy + t * t * h });
+    }
+    const padding = Math.max(8, el.strokeWidth * 4);
+    const minX = Math.min(...samples.map((point) => point.x)) - padding;
+    const maxX = Math.max(...samples.map((point) => point.x)) + padding;
+    const minY = Math.min(...samples.map((point) => point.y)) - padding;
+    const maxY = Math.max(...samples.map((point) => point.y)) + padding;
+    return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+  }
+  if (el.type === 'elbowarrow') {
+    const padding = Math.max(8, el.strokeWidth * 4);
+    const x = Math.min(el.x, el.x + el.width) - padding;
+    const y = Math.min(el.y, el.y + el.height) - padding;
+    return { x, y, width: Math.abs(el.width) + padding * 2, height: Math.abs(el.height) + padding * 2 };
+  }
   if ((el.type === 'freedraw' || el.type === 'line' || el.type === 'arrow') && el.points && el.points.length > 0) {
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
     for (const [px, py] of el.points) {
@@ -404,7 +439,14 @@ export function getElementBounds(el: ExcalidrawElement): Bounds {
   // Normalize negative dimensions (lines/arrows drawn right-to-left)
   const x = Math.min(el.x, el.x + el.width);
   const y = Math.min(el.y, el.y + el.height);
-  return { x, y, width: Math.abs(el.width) || 1, height: Math.abs(el.height) || 1 };
+  const width = Math.abs(el.width) || 1;
+  const height = Math.abs(el.height) || 1;
+  if (!el.angle) return { x, y, width, height };
+  const cos = Math.abs(Math.cos(el.angle));
+  const sin = Math.abs(Math.sin(el.angle));
+  const rotatedWidth = width * cos + height * sin;
+  const rotatedHeight = width * sin + height * cos;
+  return { x: x + width / 2 - rotatedWidth / 2, y: y + height / 2 - rotatedHeight / 2, width: rotatedWidth, height: rotatedHeight };
 }
 
 // ── Text Measurement ─────────────────────────
@@ -434,6 +476,6 @@ export function measureTextElement(el: ExcalidrawElement): Bounds {
     lines = rawLines;
   }
 
-  const height = Math.max(fontSize, lines.length * fontSize * 1.25);
+  const height = Math.max(fontSize, lines.length * fontSize * (el.lineHeight || 1.25));
   return { x: el.x, y: el.y, width, height };
 }

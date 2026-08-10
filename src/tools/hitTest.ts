@@ -23,34 +23,44 @@ export function hitTestAll(
 
 export function hitTest(el: ExcalidrawElement, point: Point): boolean {
   const threshold = HIT_TEST_THRESHOLD;
+  let testedPoint = point;
+  if (el.angle) {
+    const cx = el.x + el.width / 2;
+    const cy = el.y + el.height / 2;
+    const dx = point.x - cx;
+    const dy = point.y - cy;
+    const cos = Math.cos(-el.angle);
+    const sin = Math.sin(-el.angle);
+    testedPoint = { x: cx + dx * cos - dy * sin, y: cy + dx * sin + dy * cos };
+  }
 
   switch (el.type) {
     case 'rectangle':
-      return hitTestRectangle(el, point, threshold);
+      return hitTestRectangle(el, testedPoint, threshold);
     case 'ellipse':
-      return hitTestEllipse(el, point, threshold);
+      return hitTestEllipse(el, testedPoint, threshold);
     case 'diamond':
-      return hitTestDiamond(el, point, threshold);
+      return hitTestDiamond(el, testedPoint, threshold);
     case 'line':
-      return hitTestLine(el, point, threshold);
+      return hitTestLine(el, testedPoint, threshold);
     case 'arrow': {
       const arrowType = el.arrowType || 'straight';
       if (arrowType === 'curved') {
-        return hitTestCurvedArrow(el, point, threshold);
+        return hitTestCurvedArrow(el, testedPoint, threshold);
       } else if (arrowType === 'elbow') {
-        return hitTestElbowArrow(el, point, threshold);
+        return hitTestElbowArrow(el, testedPoint, threshold);
       } else {
-        return hitTestLine(el, point, threshold);
+        return hitTestLine(el, testedPoint, threshold);
       }
     }
     case 'curvedarrow':
-      return hitTestCurvedArrow(el, point, threshold);
+      return hitTestCurvedArrow(el, testedPoint, threshold);
     case 'elbowarrow':
-      return hitTestElbowArrow(el, point, threshold);
+      return hitTestElbowArrow(el, testedPoint, threshold);
     case 'freedraw':
-      return hitTestFreedraw(el, point, threshold);
+      return hitTestFreedraw(el, testedPoint, threshold);
     case 'text':
-      return hitTestText(el, point);
+      return hitTestText(el, testedPoint);
     default:
       return false;
   }

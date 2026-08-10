@@ -145,11 +145,13 @@ export function TextEditor({ viewport, onSubmit }: TextEditorProps) {
       fontSize: scaledFontSize,
       fontFamily: ff,
       color,
-      lineHeight: '1.25',
-      transform: 'none',
+      lineHeight: String(editingElement?.lineHeight ?? state.defaultElementProps.lineHeight ?? 1.25),
+      textAlign: editingElement?.textAlign ?? state.defaultElementProps.textAlign,
+      transform: editingElement?.angle ? `rotate(${editingElement.angle}rad)` : 'none',
+      transformOrigin: 'top left',
       ...widthStyle,
     };
-  }, [editingId, editingElement, viewport]);
+  }, [editingId, editingElement, viewport, state.defaultElementProps.lineHeight, state.defaultElementProps.textAlign]);
 
   const style = getStyle();
 
@@ -188,14 +190,6 @@ export function TextEditor({ viewport, onSubmit }: TextEditorProps) {
         try {
           const pos = JSON.parse(editingId!);
           const tempEl = {
-            angle: 0,
-            strokeColor: '#000000',
-            fillColor: 'transparent',
-            strokeWidth: 2,
-            strokeStyle: 'solid',
-            roughness: 1,
-            opacity: 100,
-            fillStyle: 'hachure',
             ...state.defaultElementProps,
             id: nanoid(),
             type: 'text',
@@ -209,14 +203,6 @@ export function TextEditor({ viewport, onSubmit }: TextEditorProps) {
           const bounds = measureTextElement(tempEl);
 
           const newElement = {
-            angle: 0,
-            strokeColor: '#000000',
-            fillColor: 'transparent',
-            strokeWidth: 2,
-            strokeStyle: 'solid',
-            roughness: 1,
-            opacity: 100,
-            fillStyle: 'hachure',
             ...state.defaultElementProps,
             id: nanoid(),
             type: 'text',
@@ -298,7 +284,7 @@ export function TextEditor({ viewport, onSubmit }: TextEditorProps) {
       ta.style.width = Math.max(40, ta.scrollWidth) + 'px';
       ta.style.height = Math.max(24, ta.scrollHeight) + 'px';
     }
-  }, [editingElement, viewport.zoom]);
+  }, [editingElement]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -307,7 +293,7 @@ export function TextEditor({ viewport, onSubmit }: TextEditorProps) {
       if (e.key === 'Escape') {
         dispatch({ type: 'SET_EDITING_TEXT', id: null });
         e.preventDefault();
-      } else if (e.key === 'Enter' && !e.shiftKey) {
+      } else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
         commitText((e.target as HTMLTextAreaElement).value);
       }
@@ -331,6 +317,7 @@ export function TextEditor({ viewport, onSubmit }: TextEditorProps) {
       onKeyDown={handleKeyDown}
       onPointerDown={handlePointerDown}
       spellCheck={false}
+      aria-label="Edit text; press Ctrl+Enter to finish"
       autoComplete="off"
     />
   );

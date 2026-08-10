@@ -152,6 +152,12 @@ export function TopBar({ onImport }: TopBarProps) {
         )}
       </button>
 
+      <label className="canvas-color-button" title="Canvas background">
+        <span className="canvas-color-sample" aria-hidden="true" style={{ background: state.canvasBackground }} />
+        <span className="canvas-color-label">Canvas</span>
+        <input aria-label="Canvas background" type="color" value={state.canvasBackground} onChange={(event) => dispatch({ type: 'SET_CANVAS_BACKGROUND', color: event.target.value })} />
+      </label>
+
       {/* Export / Import */}
       <div ref={exportRef} style={{ position: 'relative' }}>
         <button

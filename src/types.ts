@@ -15,6 +15,9 @@ export type ElementType =
 
 export type StrokeStyle = 'solid' | 'dashed' | 'dotted';
 export type FillStyle = 'solid' | 'hachure' | 'cross-hatch';
+export type TextAlign = 'left' | 'center' | 'right';
+export type VerticalAlign = 'top' | 'middle' | 'bottom';
+export type Arrowhead = 'arrow' | 'dot' | 'bar' | 'triangle' | null;
 
 export type Tool =
   | 'select'
@@ -49,13 +52,28 @@ export interface ExcalidrawElement {
   text?: string;
   fontSize?: number;
   fontFamily?: string;
-  startArrowhead?: 'arrow' | null;
-  endArrowhead?: 'arrow' | null;
+  textAlign?: TextAlign;
+  verticalAlign?: VerticalAlign;
+  lineHeight?: number;
+  startArrowhead?: Arrowhead;
+  endArrowhead?: Arrowhead;
   seed: number;
   isDeleted?: boolean;
   curvature?: number;
   arrowType?: 'straight' | 'curved' | 'elbow';
+  groupId?: string;
+  locked?: boolean;
+  startBindingId?: string | null;
+  endBindingId?: string | null;
+  cornerRadius?: number;
+  name?: string;
 }
+
+export type ElementDefaults = Pick<ExcalidrawElement,
+  'strokeColor' | 'fillColor' | 'strokeWidth' | 'strokeStyle' | 'roughness' |
+  'opacity' | 'fillStyle' | 'angle' | 'fontSize' | 'fontFamily' | 'textAlign' |
+  'verticalAlign' | 'lineHeight' | 'cornerRadius' | 'arrowType' | 'startArrowhead' |
+  'endArrowhead'>;
 
 export interface Viewport {
   zoom: number;
@@ -81,13 +99,14 @@ export interface AppState {
   activeTool: Tool;
   viewport: Viewport;
   theme: 'light' | 'dark';
+  canvasBackground: string;
   history: {
     past: ExcalidrawElement[][];
     future: ExcalidrawElement[][];
   };
   editingTextId: string | null;
   editingTextClickPoint: Point | null;
-  defaultElementProps: Record<string, any>;
+  defaultElementProps: ElementDefaults;
 }
 
 export type AppAction =
@@ -104,5 +123,7 @@ export type AppAction =
   | { type: 'TOGGLE_THEME' }
   | { type: 'SET_THEME'; theme: 'light' | 'dark' }
   | { type: 'SET_EDITING_TEXT'; id: string | null; clickPoint?: Point | null }
-  | { type: 'UPDATE_DEFAULT_PROPS'; updates: Record<string, any> }
+  | { type: 'UPDATE_DEFAULT_PROPS'; updates: Partial<ElementDefaults> }
+  | { type: 'REORDER_ELEMENTS'; ids: string[]; direction: 'front' | 'back' | 'forward' | 'backward' }
+  | { type: 'SET_CANVAS_BACKGROUND'; color: string }
   | { type: 'CLEAR_CANVAS' };

@@ -31,6 +31,13 @@ export const DEFAULT_ELEMENT_PROPS = {
   angle: 0,
   fontSize: 20,
   fontFamily: 'Virgil',
+  textAlign: 'left' as const,
+  verticalAlign: 'top' as const,
+  lineHeight: 1.25,
+  cornerRadius: 8,
+  arrowType: 'straight' as const,
+  startArrowhead: null,
+  endArrowhead: 'arrow' as const,
 };
 
 export const KEYBOARD_SHORTCUTS: Record<string, string> = {

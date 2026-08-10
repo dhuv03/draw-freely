@@ -4,7 +4,7 @@
 
 import { useAppContext } from '../AppContext';
 import { STROKE_COLORS, FILL_COLORS, STROKE_WIDTHS } from '../constants';
-import type { StrokeStyle, FillStyle } from '../types';
+import type { StrokeStyle, FillStyle, ExcalidrawElement, TextAlign, VerticalAlign, ElementDefaults, ElementType } from '../types';
 
 export function PropertiesPanel() {
   const { state, dispatch } = useAppContext();
@@ -26,13 +26,13 @@ export function PropertiesPanel() {
   const currentProperties = hasSelection ? selectedElements[0] : state.defaultElementProps;
   
   // Current active element type (for conditional sections):
-  const currentType = hasSelection ? currentProperties.type : state.activeTool;
+  const currentType = hasSelection ? selectedElements[0].type : state.activeTool;
 
-  const updateAll = (updates: Record<string, any>) => {
+  const updateAll = (updates: Partial<ExcalidrawElement>) => {
     if (hasSelection) {
       dispatch({ type: 'SNAPSHOT' });
       for (const id of selectedElementIds) {
-        let finalUpdates = { ...updates };
+        const finalUpdates = { ...updates };
         const el = elements.find((x) => x.id === id);
         if (el && el.type === 'arrow' && updates.arrowType === 'curved') {
           if (el.points && el.points.length === 2) {
@@ -54,12 +54,44 @@ export function PropertiesPanel() {
         dispatch({ type: 'UPDATE_ELEMENT', id, updates: finalUpdates });
       }
     } else {
-      dispatch({ type: 'UPDATE_DEFAULT_PROPS', updates });
+      dispatch({ type: 'UPDATE_DEFAULT_PROPS', updates: updates as Partial<ElementDefaults> });
     }
+  };
+
+  const align = (axis: 'left' | 'center' | 'right' | 'top' | 'middle' | 'bottom') => {
+    if (selectedElements.length < 2) return;
+    dispatch({ type: 'SNAPSHOT' });
+    const left = Math.min(...selectedElements.map((el) => el.x));
+    const right = Math.max(...selectedElements.map((el) => el.x + el.width));
+    const top = Math.min(...selectedElements.map((el) => el.y));
+    const bottom = Math.max(...selectedElements.map((el) => el.y + el.height));
+    selectedElements.forEach((el) => {
+      const updates: Partial<ExcalidrawElement> = {};
+      if (axis === 'left') updates.x = left;
+      if (axis === 'center') updates.x = (left + right - el.width) / 2;
+      if (axis === 'right') updates.x = right - el.width;
+      if (axis === 'top') updates.y = top;
+      if (axis === 'middle') updates.y = (top + bottom - el.height) / 2;
+      if (axis === 'bottom') updates.y = bottom - el.height;
+      dispatch({ type: 'UPDATE_ELEMENT', id: el.id, updates });
+    });
+  };
+
+  const distribute = (horizontal: boolean) => {
+    if (selectedElements.length < 3) return;
+    dispatch({ type: 'SNAPSHOT' });
+    const sorted = [...selectedElements].sort((a, b) => horizontal ? a.x - b.x : a.y - b.y);
+    const first = horizontal ? sorted[0].x : sorted[0].y;
+    const last = horizontal ? sorted.at(-1)!.x : sorted.at(-1)!.y;
+    sorted.forEach((el, index) => dispatch({ type: 'UPDATE_ELEMENT', id: el.id, updates: horizontal ? { x: first + (last - first) * index / (sorted.length - 1) } : { y: first + (last - first) * index / (sorted.length - 1) } }));
   };
 
   return (
     <div className="properties-panel glass-panel" role="complementary" aria-label="Element properties">
+      {selectedElements.length > 1 && <div className="prop-section"><span className="prop-label">Align</span><div className="compact-grid">
+        {(['left','center','right','top','middle','bottom'] as const).map((value) => <button key={value} onClick={() => align(value)} aria-label={`Align ${value}`}>{value.slice(0,1).toUpperCase()}</button>)}
+        <button onClick={() => distribute(true)} disabled={selectedElements.length < 3} aria-label="Distribute horizontally">↔</button><button onClick={() => distribute(false)} disabled={selectedElements.length < 3} aria-label="Distribute vertically">↕</button>
+      </div></div>}
       {/* Arrow Type (Straight, Curved, Elbow) */}
       {(currentType === 'arrow' || currentType === 'curvedarrow' || currentType === 'elbowarrow') && (
         <div className="prop-section">
@@ -68,8 +100,8 @@ export function PropertiesPanel() {
             {[
               {
                 label: 'Straight Arrow',
-                typeVal: 'arrow',
-                arrowTypeVal: 'straight',
+                typeVal: 'arrow' as ElementType,
+                arrowTypeVal: 'straight' as const,
                 icon: (
                   <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <line x1="5" y1="19" x2="19" y2="5" />
@@ -79,8 +111,8 @@ export function PropertiesPanel() {
               },
               {
                 label: 'Curved Arrow',
-                typeVal: 'curvedarrow',
-                arrowTypeVal: 'curved',
+                typeVal: 'curvedarrow' as ElementType,
+                arrowTypeVal: 'curved' as const,
                 icon: (
                   <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M4,20 C10,12 12,8 20,4" />
@@ -90,8 +122,8 @@ export function PropertiesPanel() {
               },
               {
                 label: 'Elbow Arrow',
-                typeVal: 'elbowarrow',
-                arrowTypeVal: 'elbow',
+                typeVal: 'elbowarrow' as ElementType,
+                arrowTypeVal: 'elbow' as const,
                 icon: (
                   <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M4,18 L12,18 L12,6 L20,6" />
@@ -101,11 +133,12 @@ export function PropertiesPanel() {
               },
             ].map((opt) => {
               const isActive = hasSelection
-                ? currentProperties.type === opt.typeVal
+                ? selectedElements[0].type === opt.typeVal
                 : state.defaultElementProps.arrowType === opt.arrowTypeVal;
               return (
                 <div className="tooltip-container" key={opt.label}>
                   <button
+                    aria-label={opt.label}
                     className={`segment-btn ${isActive ? 'active' : ''}`}
                     style={{ width: '100%' }}
                     onClick={() => {
@@ -170,6 +203,7 @@ export function PropertiesPanel() {
             {STROKE_WIDTHS.map((w) => (
               <button
                 key={w}
+                aria-label={`Stroke width ${w}`}
                 className={`width-btn ${currentProperties.strokeWidth === w ? 'active' : ''}`}
                 onClick={() => updateAll({ strokeWidth: w })}
               >
@@ -195,6 +229,7 @@ export function PropertiesPanel() {
             {(['solid', 'dashed', 'dotted'] as StrokeStyle[]).map((style) => (
               <button
                 key={style}
+                aria-label={`${style} stroke`}
                 className={`style-btn ${currentProperties.strokeStyle === style ? 'active' : ''}`}
                 onClick={() => updateAll({ strokeStyle: style })}
               >
@@ -271,6 +306,7 @@ export function PropertiesPanel() {
             ].map((preset) => (
               <div className="tooltip-container" key={preset.label}>
                 <button
+                  aria-label={preset.label}
                   className={`segment-btn ${Math.round(currentProperties.roughness) === preset.val ? 'active' : ''}`}
                   style={{ width: '100%' }}
                   onClick={() => updateAll({ roughness: preset.val })}
@@ -321,6 +357,16 @@ export function PropertiesPanel() {
           </div>
         </div>
       )}
+
+      {currentType === 'text' && <>
+        <div className="prop-section"><span className="prop-label">Text align</span><div className="segmented-control">{(['left','center','right'] as TextAlign[]).map((value) => <button key={value} className={`segment-btn ${currentProperties.textAlign === value ? 'active' : ''}`} onClick={() => updateAll({ textAlign: value })} aria-label={`Text align ${value}`}>{value}</button>)}</div></div>
+        <div className="prop-section"><span className="prop-label">Vertical align</span><div className="segmented-control">{(['top','middle','bottom'] as VerticalAlign[]).map((value) => <button key={value} className={`segment-btn ${currentProperties.verticalAlign === value ? 'active' : ''}`} onClick={() => updateAll({ verticalAlign: value })}>{value}</button>)}</div></div>
+        <div className="prop-section"><label className="prop-label" htmlFor="line-height">Line height</label><input id="line-height" type="range" className="prop-slider" min="1" max="2" step="0.05" value={currentProperties.lineHeight || 1.25} onChange={(event) => updateAll({ lineHeight: Number(event.target.value) })} /></div>
+      </>}
+
+      {['rectangle','diamond'].includes(String(currentType)) && <div className="prop-section"><label className="prop-label" htmlFor="corner-radius">Corner radius</label><input id="corner-radius" type="range" className="prop-slider" min="0" max="40" value={currentProperties.cornerRadius || 0} onChange={(event) => updateAll({ cornerRadius: Number(event.target.value) })} /></div>}
+
+      {!hasSelection && <div className="prop-section"><label className="prop-label" htmlFor="canvas-background">Canvas background</label><input id="canvas-background" type="color" value={state.canvasBackground} onChange={(event) => dispatch({ type: 'SET_CANVAS_BACKGROUND', color: event.target.value })} /></div>}
 
       {/* Font Family (text only) */}
       {currentType === 'text' && (

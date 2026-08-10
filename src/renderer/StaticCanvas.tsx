@@ -3,7 +3,7 @@
 // Renders all committed + in-progress elements
 // ──────────────────────────────────────────────
 
-import React, { useRef, useEffect, useCallback, useImperativeHandle, forwardRef } from 'react';
+import React, { useRef, useEffect, useLayoutEffect, useCallback, useImperativeHandle, forwardRef } from 'react';
 import rough from 'roughjs';
 import { useAppContext } from '../AppContext';
 import { renderElement } from './renderElement';
@@ -24,7 +24,7 @@ export const StaticCanvas = forwardRef<StaticCanvasHandle, StaticCanvasProps>(
 
     // Keep a stable ref to the latest state for imperative renders
     const stateRef = useRef(state);
-    stateRef.current = state;
+    useLayoutEffect(() => { stateRef.current = state; }, [state]);
 
     const render = useCallback(() => {
       const canvas = canvasRef.current;
@@ -41,14 +41,14 @@ export const StaticCanvas = forwardRef<StaticCanvasHandle, StaticCanvasProps>(
         canvas.height = height * dpr;
       }
 
-      const { elements, viewport, theme } = stateRef.current;
+      const { elements, viewport, theme, canvasBackground } = stateRef.current;
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.save();
       ctx.scale(dpr, dpr);
 
       // Canvas background
-      ctx.fillStyle = theme === 'dark' ? '#0f0f1a' : '#ffffff';
+      ctx.fillStyle = canvasBackground || (theme === 'dark' ? '#0f0f1a' : '#ffffff');
       ctx.fillRect(0, 0, width, height);
 
       // Viewport transform: pan then zoom
@@ -65,22 +65,28 @@ export const StaticCanvas = forwardRef<StaticCanvasHandle, StaticCanvasProps>(
       for (const el of elements) {
         if (el.isDeleted) continue;
         if (el.id === stateRef.current.editingTextId) continue;
-        renderElement(ctx, el, rc);
+        const visibleElement = theme === 'dark' && ['#000000', '#000', '#1e1e1e'].includes(el.strokeColor.toLowerCase())
+          ? { ...el, strokeColor: '#e8e8f0' }
+          : el;
+        renderElement(ctx, visibleElement, rc);
       }
 
       // Render the in-progress element (being drawn right now)
       const activeEl = activeElementRef.current;
       if (activeEl) {
-        renderElement(ctx, activeEl, rc);
+        const visibleActiveElement = theme === 'dark' && ['#000000', '#000', '#1e1e1e'].includes(activeEl.strokeColor.toLowerCase())
+          ? { ...activeEl, strokeColor: '#e8e8f0' }
+          : activeEl;
+        renderElement(ctx, visibleActiveElement, rc);
       }
 
       ctx.restore();
-    }, [state.elements, state.viewport, state.theme, activeElementRef]);
+    }, [activeElementRef]);
 
     // Re-render when state changes
     useEffect(() => {
       requestAnimationFrame(render);
-    }, [render]);
+    }, [render, state.elements, state.viewport, state.theme, state.canvasBackground, state.editingTextId]);
 
     // Handle window resize
     useEffect(() => {

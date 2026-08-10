@@ -32,6 +32,7 @@ export async function saveToDB(data: {
   elements?: ExcalidrawElement[];
   viewport?: Viewport;
   theme?: 'light' | 'dark';
+  canvasBackground?: string;
 }) {
   try {
     const db = await getDB();
@@ -40,6 +41,7 @@ export async function saveToDB(data: {
     if (data.elements) await store.put(data.elements, 'elements');
     if (data.viewport) await store.put(data.viewport, 'viewport');
     if (data.theme) await store.put(data.theme, 'theme');
+    if (data.canvasBackground) await store.put(data.canvasBackground, 'canvasBackground');
     await tx.done;
   } catch (err) {
     console.warn('Failed to save to IndexedDB:', err);
@@ -50,17 +52,19 @@ export async function loadFromDB(): Promise<{
   elements?: ExcalidrawElement[];
   viewport?: Viewport;
   theme?: 'light' | 'dark';
+  canvasBackground?: string;
 }> {
   try {
     const db = await getDB();
     const tx = db.transaction(STORE_NAME, 'readonly');
     const store = tx.objectStore(STORE_NAME);
-    const [elements, viewport, theme] = await Promise.all([
+    const [elements, viewport, theme, canvasBackground] = await Promise.all([
       store.get('elements'),
       store.get('viewport'),
       store.get('theme'),
+      store.get('canvasBackground'),
     ]);
-    return { elements, viewport, theme };
+    return { elements, viewport, theme, canvasBackground };
   } catch (err) {
     console.warn('Failed to load from IndexedDB:', err);
     return {};
@@ -75,6 +79,7 @@ export function debouncedSave(data: {
   elements?: ExcalidrawElement[];
   viewport?: Viewport;
   theme?: 'light' | 'dark';
+  canvasBackground?: string;
 }, delay = 500) {
   if (saveTimeout) clearTimeout(saveTimeout);
   saveTimeout = setTimeout(() => saveToDB(data), delay);
@@ -423,14 +428,20 @@ export function exportJSON(elements: ExcalidrawElement[]) {
 
 export function importJSON(file: File): Promise<ExcalidrawElement[]> {
   return new Promise((resolve, reject) => {
+    if (file.size > 20 * 1024 * 1024) { reject(new Error('Drawing file is larger than 20 MB')); return; }
     const reader = new FileReader();
     reader.onload = () => {
       try {
         const data = JSON.parse(reader.result as string);
-        if (data.type === 'drawfreely' && Array.isArray(data.elements)) {
-          resolve(data.elements);
-        } else if (Array.isArray(data)) {
-          resolve(data);
+        const rawElements: unknown = data && typeof data === 'object' && 'type' in data && data.type === 'drawfreely' && 'elements' in data ? data.elements : data;
+        if (Array.isArray(rawElements) && rawElements.length <= 100_000) {
+          const valid = rawElements.every((element): element is ExcalidrawElement => {
+            if (!element || typeof element !== 'object') return false;
+            const candidate = element as Partial<ExcalidrawElement>;
+            return typeof candidate.id === 'string' && typeof candidate.type === 'string' && typeof candidate.x === 'number' && Number.isFinite(candidate.x) && typeof candidate.y === 'number' && Number.isFinite(candidate.y) && typeof candidate.width === 'number' && typeof candidate.height === 'number';
+          });
+          if (!valid) throw new Error('Drawing contains invalid elements');
+          resolve(rawElements);
         } else {
           reject(new Error('Invalid DrawFreely file format'));
         }

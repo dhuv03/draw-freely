@@ -4,7 +4,7 @@
 // freedraw, text, eraser, hand, pan, zoom
 // ??????????????????????????????????????????????
 
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 import { useAppContext } from '../AppContext';
 import type { ExcalidrawElement, Point, Tool } from '../types';
 import {
@@ -22,13 +22,31 @@ import { nanoid } from 'nanoid';
 import type { StaticCanvasHandle } from '../renderer/StaticCanvas';
 import type { InteractiveCanvasHandle } from '../renderer/InteractiveCanvas';
 
+let elementClipboard: ExcalidrawElement[] = [];
+
+function bindArrowEndpoint(point: Point, elements: ExcalidrawElement[], excludedId: string) {
+  let best: { element: ExcalidrawElement; point: Point; distance: number } | null = null;
+  for (const element of elements) {
+    if (element.id === excludedId || element.isDeleted || ['arrow', 'line', 'freedraw', 'text'].includes(element.type)) continue;
+    const bounds = getElementBounds(element);
+    const center = { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 };
+    const dx = point.x - center.x;
+    const dy = point.y - center.y;
+    const scale = Math.max(Math.abs(dx) / Math.max(bounds.width / 2, 1), Math.abs(dy) / Math.max(bounds.height / 2, 1), 1);
+    const edge = { x: center.x + dx / scale, y: center.y + dy / scale };
+    const distance = Math.hypot(point.x - edge.x, point.y - edge.y);
+    if (distance <= 28 && (!best || distance < best.distance)) best = { element, point: edge, distance };
+  }
+  return best;
+}
+
 // ?? Pointer State (ref, not React state) ?????
 interface PointerState {
   isDown: boolean;
   startCanvas: Point;
   lastCanvas: Point;
   startScreen: Point;
-  action: 'none' | 'drawing' | 'moving' | 'resizing' | 'panning' | 'rubberband' | 'erasing';
+  action: 'none' | 'drawing' | 'moving' | 'resizing' | 'rotating' | 'panning' | 'rubberband' | 'erasing';
   resizeHandle: ResizeHandle | null;
   movedElements: Map<string, { x: number; y: number }>;
   spaceHeld: boolean;
@@ -58,7 +76,7 @@ export function useCanvasEvents(
 ) {
   const { state, dispatch } = useAppContext();
   const stateRef = useRef(state);
-  stateRef.current = state;
+  useLayoutEffect(() => { stateRef.current = state; }, [state]);
   const ps = useRef<PointerState>(initialPointerState());
 
   // ?? Coordinate conversion ??????????????????
@@ -70,14 +88,6 @@ export function useCanvasEvents(
   // ?? Create a new element ???????????????????
   const createElement = useCallback(
     (type: ExcalidrawElement['type'], x: number, y: number): ExcalidrawElement => ({
-      angle: 0,
-      strokeColor: '#000000',
-      fillColor: 'transparent',
-      strokeWidth: 2,
-      strokeStyle: 'solid',
-      roughness: 1,
-      opacity: 100,
-      fillStyle: 'hachure',
       ...stateRef.current.defaultElementProps,
       id: nanoid(),
       type,
@@ -229,6 +239,10 @@ export function useCanvasEvents(
           const selEl = s.elements.find((el) => el.id === s.selectedElementIds[0]);
           if (selEl) {
             const bounds = getElementBounds(selEl);
+            const rotatePoint = { x: bounds.x + bounds.width / 2, y: bounds.y - 24 / s.viewport.zoom };
+            if (Math.hypot(cp.x - rotatePoint.x, cp.y - rotatePoint.y) <= 10 / s.viewport.zoom) {
+              dispatch({ type: 'SNAPSHOT' }); p.action = 'rotating'; (p as PointerState & { rotationCenter?: Point }).rotationCenter = { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 }; return;
+            }
             const handle = hitTestResizeHandles(bounds, cp, s.viewport.zoom, selEl.type === 'text');
             if (handle) {
               dispatch({ type: 'SNAPSHOT' });
@@ -247,25 +261,29 @@ export function useCanvasEvents(
         // 2. Hit test elements
         const hit = hitTestAll(s.elements, cp);
         if (hit) {
+          if (hit.locked) return;
+          const hitIds = hit.groupId
+            ? s.elements.filter((el) => el.groupId === hit.groupId && !el.isDeleted).map((el) => el.id)
+            : [hit.id];
           const isAlreadySelected = s.selectedElementIds.includes(hit.id);
           if (e.shiftKey) {
             // Toggle selection
             const newIds = isAlreadySelected
-              ? s.selectedElementIds.filter((id) => id !== hit.id)
-              : [...s.selectedElementIds, hit.id];
+              ? s.selectedElementIds.filter((id) => !hitIds.includes(id))
+              : [...new Set([...s.selectedElementIds, ...hitIds])];
             dispatch({ type: 'SET_SELECTION', ids: newIds });
           } else if (!isAlreadySelected) {
-            dispatch({ type: 'SET_SELECTION', ids: [hit.id] });
+            dispatch({ type: 'SET_SELECTION', ids: hitIds });
           }
           // Prepare to move
           dispatch({ type: 'SNAPSHOT' });
           p.action = 'moving';
           // Store starting positions of all selected elements
           const selectedIds = e.shiftKey && !s.selectedElementIds.includes(hit.id)
-            ? [...s.selectedElementIds, hit.id]
+            ? [...new Set([...s.selectedElementIds, ...hitIds])]
             : s.selectedElementIds.includes(hit.id)
               ? s.selectedElementIds
-              : [hit.id];
+              : hitIds;
           p.movedElements.clear();
           for (const id of selectedIds) {
             const el = s.elements.find((el) => el.id === id);
@@ -381,11 +399,33 @@ export function useCanvasEvents(
       if (p.action === 'drawing' && activeElementRef.current) {
         const el = activeElementRef.current;
 
+        if (['arrow', 'curvedarrow', 'elbowarrow'].includes(el.type)) {
+          const start = bindArrowEndpoint({ x: el.x, y: el.y }, stateRef.current.elements, el.id);
+          const end = bindArrowEndpoint({ x: el.x + el.width, y: el.y + el.height }, stateRef.current.elements, el.id);
+          if (start) { el.startBindingId = start.element.id; el.x = start.point.x; el.y = start.point.y; }
+          if (end) { el.endBindingId = end.element.id; el.width = end.point.x - el.x; el.height = end.point.y - el.y; }
+          if (el.type === 'elbowarrow' || el.arrowType === 'elbow') {
+            el.points = [[0, 0, 0], [el.width, 0, 0], [el.width, el.height, 0]];
+          } else if (el.type === 'arrow' && el.arrowType !== 'curved') {
+            el.points = [[0, 0, 0], [el.width, el.height, 0]];
+          }
+        }
+
         if (el.type === 'freedraw') {
-          // Add point relative to element origin
-          const relX = cp.x - el.x;
-          const relY = cp.y - el.y;
-          el.points = [...(el.points || []), [relX, relY, e.pressure || 0.5]];
+          // Preserve high-frequency pen/trackpad samples instead of dropping
+          // coalesced pointer events between animation frames.
+          const samples = e.getCoalescedEvents?.() ?? [e];
+          const nextPoints = [...(el.points || [])];
+          for (const sample of samples) {
+            const point = screenToCanvas(sample.clientX - rect.left, sample.clientY - rect.top);
+            const previous = nextPoints[nextPoints.length - 1];
+            const relX = point.x - el.x;
+            const relY = point.y - el.y;
+            if (!previous || Math.hypot(relX - previous[0], relY - previous[1]) >= 0.35 / s.viewport.zoom) {
+              nextPoints.push([relX, relY, sample.pressure > 0 ? sample.pressure : 0.5]);
+            }
+          }
+          el.points = nextPoints;
         } else {
           // Update dimensions
           el.width = cp.x - p.startCanvas.x;
@@ -478,17 +518,37 @@ export function useCanvasEvents(
 
       // ?? MOVING ELEMENTS ?????????????????
       if (p.action === 'moving') {
+        const moveDx = cp.x - p.startCanvas.x;
+        const moveDy = cp.y - p.startCanvas.y;
         for (const [id, start] of p.movedElements) {
           dispatch({
             type: 'UPDATE_ELEMENT',
             id,
             updates: {
-              x: start.x + (cp.x - p.startCanvas.x),
-              y: start.y + (cp.y - p.startCanvas.y),
+              x: start.x + moveDx,
+              y: start.y + moveDy,
             },
           });
+          for (const arrow of s.elements.filter((element) => !p.movedElements.has(element.id) && (element.startBindingId === id || element.endBindingId === id))) {
+            if (arrow.startBindingId === id) {
+              dispatch({ type: 'UPDATE_ELEMENT', id: arrow.id, updates: { x: arrow.x + moveDx, y: arrow.y + moveDy, width: arrow.width - moveDx, height: arrow.height - moveDy } });
+            } else {
+              dispatch({ type: 'UPDATE_ELEMENT', id: arrow.id, updates: { width: arrow.width + moveDx, height: arrow.height + moveDy } });
+            }
+          }
         }
         forceInteractiveRender();
+        return;
+      }
+
+      if (p.action === 'rotating') {
+        const id = s.selectedElementIds[0];
+        const center = (p as PointerState & { rotationCenter?: Point }).rotationCenter;
+        if (id && center) {
+          let angle = Math.atan2(cp.y - center.y, cp.x - center.x) + Math.PI / 2;
+          if (e.shiftKey) angle = Math.round(angle / (Math.PI / 12)) * (Math.PI / 12);
+          dispatch({ type: 'UPDATE_ELEMENT', id, updates: { angle } }); forceInteractiveRender();
+        }
         return;
       }
 
@@ -590,7 +650,7 @@ export function useCanvasEvents(
   // POINTER UP
   // ??????????????????????????????????????????
   const handlePointerUp = useCallback(
-    (_e: PointerEvent) => {
+    () => {
       const p = ps.current;
       const canvas = interactiveCanvasRef.current;
 
@@ -742,10 +802,36 @@ export function useCanvasEvents(
         e.preventDefault();
         dispatch({
           type: 'SET_SELECTION',
-          ids: s.elements.filter((el) => !el.isDeleted).map((el) => el.id),
+          ids: s.elements.filter((el) => !el.isDeleted && !el.locked).map((el) => el.id),
         });
         dispatch({ type: 'SET_TOOL', tool: 'select' });
         return;
+      }
+
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') {
+        elementClipboard = s.elements.filter((el) => s.selectedElementIds.includes(el.id)).map((el) => ({ ...el, points: el.points?.map((point) => [...point]) }));
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'x') {
+        elementClipboard = s.elements.filter((el) => s.selectedElementIds.includes(el.id)).map((el) => ({ ...el, points: el.points?.map((point) => [...point]) }));
+        if (elementClipboard.length) { e.preventDefault(); dispatch({ type: 'SNAPSHOT' }); dispatch({ type: 'DELETE_ELEMENTS', ids: s.selectedElementIds }); }
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v' && elementClipboard.length) {
+        e.preventDefault(); dispatch({ type: 'SNAPSHOT' });
+        const copies = elementClipboard.map((el) => ({ ...el, id: nanoid(), x: el.x + 24, y: el.y + 24, groupId: undefined, startBindingId: null, endBindingId: null, points: el.points?.map((point) => [...point] as [number, number, number]) }));
+        elementClipboard = copies;
+        dispatch({ type: 'SET_ELEMENTS', elements: [...s.elements, ...copies] });
+        dispatch({ type: 'SET_SELECTION', ids: copies.map((el) => el.id) });
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd' && s.selectedElementIds.length) {
+        e.preventDefault();
+        const copies = s.elements.filter((el) => s.selectedElementIds.includes(el.id)).map((el) => ({ ...el, id: nanoid(), x: el.x + 20, y: el.y + 20, groupId: undefined, points: el.points?.map((point) => [...point] as [number, number, number]) }));
+        dispatch({ type: 'SNAPSHOT' }); dispatch({ type: 'SET_ELEMENTS', elements: [...s.elements, ...copies] }); dispatch({ type: 'SET_SELECTION', ids: copies.map((el) => el.id) }); return;
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'g' && s.selectedElementIds.length > 1) {
+        e.preventDefault(); const groupId = nanoid(); dispatch({ type: 'SNAPSHOT' }); s.selectedElementIds.forEach((id) => dispatch({ type: 'UPDATE_ELEMENT', id, updates: { groupId } })); return;
       }
 
       // Tool shortcuts (single key, no modifiers)
@@ -813,6 +899,7 @@ export function useCanvasEvents(
     canvas.addEventListener('pointerdown', handlePointerDown);
     canvas.addEventListener('pointermove', handlePointerMove);
     canvas.addEventListener('pointerup', handlePointerUp);
+    canvas.addEventListener('pointercancel', handlePointerUp);
     canvas.addEventListener('pointerleave', handlePointerUp);
     canvas.addEventListener('dblclick', handleDoubleClick);
     canvas.addEventListener('wheel', handleWheel, { passive: false });
@@ -821,6 +908,7 @@ export function useCanvasEvents(
       canvas.removeEventListener('pointerdown', handlePointerDown);
       canvas.removeEventListener('pointermove', handlePointerMove);
       canvas.removeEventListener('pointerup', handlePointerUp);
+      canvas.removeEventListener('pointercancel', handlePointerUp);
       canvas.removeEventListener('pointerleave', handlePointerUp);
       canvas.removeEventListener('dblclick', handleDoubleClick);
       canvas.removeEventListener('wheel', handleWheel);
@@ -923,6 +1011,11 @@ function updateCursor(
           }
 
           const bounds = getElementBounds(selEl);
+          const rotatePoint = { x: bounds.x + bounds.width / 2, y: bounds.y - 24 / state.viewport.zoom };
+          if (Math.hypot(cp.x - rotatePoint.x, cp.y - rotatePoint.y) <= 10 / state.viewport.zoom) {
+            canvas.style.cursor = 'grab';
+            return;
+          }
           const handle = hitTestResizeHandles(bounds, cp, state.viewport.zoom, selEl.type === 'text');
           if (handle) {
             const cursorMap: Record<string, string> = {
@@ -940,7 +1033,8 @@ function updateCursor(
           }
         }
       }
-      canvas.style.cursor = 'default';
+      const hovered = hitTestAll(state.elements, cp);
+      canvas.style.cursor = hovered && !hovered.locked ? 'move' : hovered?.locked ? 'not-allowed' : 'default';
       break;
     }
     case 'hand':

@@ -18,5 +18,15 @@ export default defineConfig([
     languageOptions: {
       globals: globals.browser,
     },
+    rules: {
+      // RoughJS exposes intentionally dynamic drawable/generator objects, and
+      // the canvas gesture state carries tool-specific transient fields.
+      '@typescript-eslint/no-explicit-any': 'off',
+      'no-useless-assignment': 'off',
+    },
+  },
+  {
+    files: ['src/AppContext.tsx'],
+    rules: { 'react-refresh/only-export-components': 'off' },
   },
 ])
