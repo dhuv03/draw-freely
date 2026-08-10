@@ -2,12 +2,14 @@
 // DrawFreely — Properties Panel (Right Side)
 // ──────────────────────────────────────────────
 
+import { useState } from 'react';
 import { useAppContext } from '../AppContext';
 import { STROKE_COLORS, FILL_COLORS, STROKE_WIDTHS } from '../constants';
 import type { StrokeStyle, FillStyle, ExcalidrawElement, TextAlign, VerticalAlign, ElementDefaults, ElementType } from '../types';
 
 export function PropertiesPanel() {
   const { state, dispatch } = useAppContext();
+  const [mobileCollapsed, setMobileCollapsed] = useState(false);
   const { elements, selectedElementIds } = state;
 
   const selectedElements = elements.filter((el) =>
@@ -87,7 +89,18 @@ export function PropertiesPanel() {
   };
 
   return (
-    <div className="properties-panel glass-panel" role="complementary" aria-label="Element properties">
+    <div className={`properties-panel glass-panel ${mobileCollapsed ? 'mobile-collapsed' : ''}`} role="complementary" aria-label="Element properties">
+      <button
+        type="button"
+        className="properties-collapse-btn"
+        onClick={() => setMobileCollapsed((collapsed) => !collapsed)}
+        aria-label={mobileCollapsed ? 'Expand properties' : 'Collapse properties'}
+        aria-expanded={!mobileCollapsed}
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <polyline points={mobileCollapsed ? '6 15 12 9 18 15' : '6 9 12 15 18 9'} />
+        </svg>
+      </button>
       {selectedElements.length > 1 && <div className="prop-section"><span className="prop-label">Align</span><div className="compact-grid">
         {(['left','center','right','top','middle','bottom'] as const).map((value) => <button key={value} onClick={() => align(value)} aria-label={`Align ${value}`}>{value.slice(0,1).toUpperCase()}</button>)}
         <button onClick={() => distribute(true)} disabled={selectedElements.length < 3} aria-label="Distribute horizontally">↔</button><button onClick={() => distribute(false)} disabled={selectedElements.length < 3} aria-label="Distribute vertically">↕</button>

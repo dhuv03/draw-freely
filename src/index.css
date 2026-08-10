@@ -288,6 +288,24 @@ kbd { color: var(--text-muted); font: 10px inherit; }
   overflow-y: auto;
 }
 
+.properties-collapse-btn {
+  display: none;
+  border: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.properties-collapse-btn svg {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 .prop-section {
   display: flex;
   flex-direction: column;
@@ -500,6 +518,31 @@ kbd { color: var(--text-muted); font: 10px inherit; }
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 12px;
       padding: 12px;
+      transition: transform .22s ease, max-height .22s ease;
+      padding-top: 38px;
+    }
+    .properties-collapse-btn {
+      display: grid;
+      place-items: center;
+      position: absolute;
+      top: 6px;
+      right: 8px;
+      width: 34px;
+      height: 28px;
+      border-radius: 7px;
+      z-index: 2;
+    }
+    .properties-collapse-btn:hover { background: var(--accent-light); }
+    .properties-panel.mobile-collapsed {
+      transform: translateY(calc(100% - 36px));
+      overflow: hidden;
+      pointer-events: none;
+    }
+    .properties-panel.mobile-collapsed .properties-collapse-btn {
+      pointer-events: auto;
+    }
+    .properties-panel.mobile-collapsed > :not(.properties-collapse-btn) {
+      visibility: hidden;
     }
     .toolbar-tooltip, .tooltip-box { display: none; }
     .toolbar-btn, .top-bar-btn { min-width: 40px; min-height: 40px; }
