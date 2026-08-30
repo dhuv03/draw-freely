@@ -3,7 +3,7 @@
 // ──────────────────────────────────────────────
 
 import { openDB, type IDBPDatabase } from 'idb';
-import type { ExcalidrawElement, Viewport } from '../types';
+import type { ExcalidrawElement, Viewport, ThemeId, AppearanceMode, CanvasPattern, Tool, ToolbarOrientation, DrawingLayer } from '../types';
 import { renderElement, getElementBounds, getArrowGeometry } from '../renderer/renderElement';
 import rough from 'roughjs';
 
@@ -30,18 +30,38 @@ function getDB() {
 
 export async function saveToDB(data: {
   elements?: ExcalidrawElement[];
+  layers?: DrawingLayer[];
+  activeLayerId?: string;
   viewport?: Viewport;
   theme?: 'light' | 'dark';
+  appearanceMode?: AppearanceMode;
   canvasBackground?: string;
+  themeId?: ThemeId;
+  toolLocked?: boolean;
+  canvasPattern?: CanvasPattern;
+  hiddenTools?: Tool[];
+  toolbarOrientation?: ToolbarOrientation;
+  toolbarPosition?: { x: number; y: number };
+  patternOpacity?: number;
 }) {
   try {
     const db = await getDB();
     const tx = db.transaction(STORE_NAME, 'readwrite');
     const store = tx.objectStore(STORE_NAME);
     if (data.elements) await store.put(data.elements, 'elements');
+    if (data.layers) await store.put(data.layers, 'layers');
+    if (data.activeLayerId) await store.put(data.activeLayerId, 'activeLayerId');
     if (data.viewport) await store.put(data.viewport, 'viewport');
     if (data.theme) await store.put(data.theme, 'theme');
+    if (data.appearanceMode) await store.put(data.appearanceMode, 'appearanceMode');
     if (data.canvasBackground) await store.put(data.canvasBackground, 'canvasBackground');
+    if (data.themeId) await store.put(data.themeId, 'themeId');
+    if (typeof data.toolLocked === 'boolean') await store.put(data.toolLocked, 'toolLocked');
+    if (data.canvasPattern) await store.put(data.canvasPattern, 'canvasPattern');
+    if (data.hiddenTools) await store.put(data.hiddenTools, 'hiddenTools');
+    if (data.toolbarOrientation) await store.put(data.toolbarOrientation, 'toolbarOrientation');
+    if (data.toolbarPosition) await store.put(data.toolbarPosition, 'toolbarPosition');
+    if (typeof data.patternOpacity === 'number') await store.put(data.patternOpacity, 'patternOpacity');
     await tx.done;
   } catch (err) {
     console.warn('Failed to save to IndexedDB:', err);
@@ -50,21 +70,37 @@ export async function saveToDB(data: {
 
 export async function loadFromDB(): Promise<{
   elements?: ExcalidrawElement[];
+  layers?: DrawingLayer[];
+  activeLayerId?: string;
   viewport?: Viewport;
   theme?: 'light' | 'dark';
+  appearanceMode?: AppearanceMode;
   canvasBackground?: string;
+  themeId?: ThemeId;
+  toolLocked?: boolean;
+  canvasPattern?: CanvasPattern;
+  hiddenTools?: Tool[];
+  toolbarOrientation?: ToolbarOrientation;
+  toolbarPosition?: { x: number; y: number };
+  patternOpacity?: number;
 }> {
   try {
     const db = await getDB();
     const tx = db.transaction(STORE_NAME, 'readonly');
     const store = tx.objectStore(STORE_NAME);
-    const [elements, viewport, theme, canvasBackground] = await Promise.all([
+    const [elements, layers, activeLayerId, viewport, theme, appearanceMode, canvasBackground, themeId, toolLocked, canvasPattern, hiddenTools, toolbarOrientation, toolbarPosition, patternOpacity] = await Promise.all([
       store.get('elements'),
+      store.get('layers'),
+      store.get('activeLayerId'),
       store.get('viewport'),
       store.get('theme'),
+      store.get('appearanceMode'),
       store.get('canvasBackground'),
+      store.get('themeId'),
+      store.get('toolLocked'),
+      store.get('canvasPattern'), store.get('hiddenTools'), store.get('toolbarOrientation'), store.get('toolbarPosition'), store.get('patternOpacity'),
     ]);
-    return { elements, viewport, theme, canvasBackground };
+    return { elements, layers, activeLayerId, viewport, theme, appearanceMode, canvasBackground, themeId, toolLocked, canvasPattern, hiddenTools, toolbarOrientation, toolbarPosition, patternOpacity };
   } catch (err) {
     console.warn('Failed to load from IndexedDB:', err);
     return {};
@@ -77,9 +113,19 @@ let saveTimeout: ReturnType<typeof setTimeout> | null = null;
 
 export function debouncedSave(data: {
   elements?: ExcalidrawElement[];
+  layers?: DrawingLayer[];
+  activeLayerId?: string;
   viewport?: Viewport;
   theme?: 'light' | 'dark';
+  appearanceMode?: AppearanceMode;
   canvasBackground?: string;
+  themeId?: ThemeId;
+  toolLocked?: boolean;
+  canvasPattern?: CanvasPattern;
+  hiddenTools?: Tool[];
+  toolbarOrientation?: ToolbarOrientation;
+  toolbarPosition?: { x: number; y: number };
+  patternOpacity?: number;
 }, delay = 500) {
   if (saveTimeout) clearTimeout(saveTimeout);
   saveTimeout = setTimeout(() => saveToDB(data), delay);
@@ -234,6 +280,11 @@ export function exportSVG(elements: ExcalidrawElement[], theme: 'light' | 'dark'
           [el.x + w / 2, el.y + h],
           [el.x, el.y + h / 2],
         ], opts);
+        break;
+      }
+      case 'triangle': {
+        const w = el.width, h = el.height;
+        node = rc.polygon([[el.x + w / 2, el.y], [el.x + w, el.y + h], [el.x, el.y + h]], opts);
         break;
       }
       case 'line':

@@ -13,7 +13,7 @@ const cache = new Map<string, { hash: string; drawable: any }>();
 
 function getVisualHash(el: ExcalidrawElement): string {
   const pointsStr = el.points ? el.points.map(([x, y]) => `${Math.round(x)},${Math.round(y)}`).join(':') : '';
-  return `${el.type}|${Math.round(el.width * 100)}|${Math.round(el.height * 100)}|${el.strokeColor}|${el.fillColor}|${el.strokeWidth}|${el.strokeStyle}|${el.roughness}|${el.fillStyle}|${el.seed}|${el.curvature !== undefined ? Math.round(el.curvature * 100) : ''}|${pointsStr}`;
+  return `${el.type}|${Math.round(el.width * 100)}|${Math.round(el.height * 100)}|${el.strokeColor}|${el.fillColor}|${el.strokeWidth}|${el.strokeStyle}|${el.roughness}|${el.fillStyle}|${el.seed}|${el.cornerRadius || 0}|${el.curvature !== undefined ? Math.round(el.curvature * 100) : ''}|${pointsStr}`;
 }
 
 function getRoughOptions(el: ExcalidrawElement): any {
@@ -64,6 +64,11 @@ function getCachedDrawable(el: ExcalidrawElement, generator: any): any | null {
         [[w / 2, 0], [w, h / 2], [w / 2, h], [0, h / 2]] as [number, number][],
         opts,
       );
+      break;
+    }
+    case 'triangle': {
+      const w = el.width, h = el.height;
+      drawable = generator.polygon([[w / 2, 0], [w, h], [0, h]] as [number, number][], opts);
       break;
     }
     case 'line': {
@@ -249,8 +254,9 @@ function renderText(ctx: CanvasRenderingContext2D, el: ExcalidrawElement) {
         : "'Inter', Helvetica, Arial, sans-serif";
 
   const fontSize = el.fontSize || 20;
-  const font = `${fontSize}px ${fontFamily}`;
+  const font = `${el.fontStyle || 'normal'} ${el.fontWeight || 'normal'} ${fontSize}px ${fontFamily}`;
   ctx.font = font;
+  if ('letterSpacing' in ctx) ctx.letterSpacing = `${el.letterSpacing || 0}px`;
   ctx.fillStyle = el.strokeColor;
   ctx.textBaseline = 'top';
   ctx.textAlign = el.textAlign || 'left';
@@ -260,8 +266,24 @@ function renderText(ctx: CanvasRenderingContext2D, el: ExcalidrawElement) {
   const blockHeight = lines.length * lineHeight;
   const yOffset = el.verticalAlign === 'middle' ? (el.height - blockHeight) / 2 : el.verticalAlign === 'bottom' ? el.height - blockHeight : 0;
   const xOffset = el.textAlign === 'center' ? el.width / 2 : el.textAlign === 'right' ? el.width : 0;
+  if (el.textBackgroundColor && el.textBackgroundColor !== 'transparent') {
+    ctx.save();
+    ctx.fillStyle = el.textBackgroundColor;
+    ctx.fillRect(0, yOffset, el.width, blockHeight);
+    ctx.restore();
+  }
   for (let i = 0; i < lines.length; i++) {
     ctx.fillText(lines[i], xOffset, yOffset + i * lineHeight);
+    if (el.textDecoration === 'underline') {
+      const measured = ctx.measureText(lines[i]).width;
+      const startX = el.textAlign === 'center' ? xOffset - measured / 2 : el.textAlign === 'right' ? xOffset - measured : xOffset;
+      ctx.beginPath();
+      ctx.moveTo(startX, yOffset + i * lineHeight + fontSize * 1.05);
+      ctx.lineTo(startX + measured, yOffset + i * lineHeight + fontSize * 1.05);
+      ctx.strokeStyle = el.strokeColor;
+      ctx.lineWidth = Math.max(1, fontSize / 16);
+      ctx.stroke();
+    }
   }
 }
 
@@ -460,10 +482,11 @@ export function measureTextElement(el: ExcalidrawElement): Bounds {
         ? "'Fira Code', monospace"
         : "'Inter', Helvetica, Arial, sans-serif";
 
-  const font = `${fontSize}px ${fontFamily}`;
+  const font = `${el.fontStyle || 'normal'} ${el.fontWeight || 'normal'} ${fontSize}px ${fontFamily}`;
   const canvas = document.createElement('canvas');
   const ctx = canvas.getContext('2d')!;
   ctx.font = font;
+  if ('letterSpacing' in ctx) ctx.letterSpacing = `${el.letterSpacing || 0}px`;
 
   let lines: string[];
   let width = el.width;

@@ -34,11 +34,44 @@ export const DEFAULT_ELEMENT_PROPS = {
   textAlign: 'left' as const,
   verticalAlign: 'top' as const,
   lineHeight: 1.25,
+  fontWeight: 'normal' as const,
+  fontStyle: 'normal' as const,
+  textDecoration: 'none' as const,
+  letterSpacing: 0,
+  textBackgroundColor: 'transparent',
   cornerRadius: 8,
   arrowType: 'straight' as const,
   startArrowhead: null,
   endArrowhead: 'arrow' as const,
 };
+
+export const APP_THEMES = [
+  { id: 'neutral', name: 'Neutral', lightCanvas: '#ffffff', darkCanvas: '#171717', accent: '#171717' },
+  { id: 'blue', name: 'Blue', lightCanvas: '#f7fbff', darkCanvas: '#101b2d', accent: '#2563eb' },
+  { id: 'green', name: 'Green', lightCanvas: '#f6fdf9', darkCanvas: '#0d2218', accent: '#16a34a' },
+  { id: 'yellow', name: 'Yellow', lightCanvas: '#fffdf5', darkCanvas: '#29220d', accent: '#d89b00' },
+  { id: 'pink', name: 'Pink', lightCanvas: '#fff7fb', darkCanvas: '#2b1422', accent: '#e83e8c' },
+  { id: 'orange', name: 'Orange', lightCanvas: '#fff9f5', darkCanvas: '#2b190d', accent: '#ea580c' },
+  { id: 'purple', name: 'Purple', lightCanvas: '#fbf8ff', darkCanvas: '#21152e', accent: '#9333ea' },
+  { id: 'slate', name: 'Slate', lightCanvas: '#ffffff', darkCanvas: '#0f172a', accent: '#64748b' },
+  { id: 'graphite', name: 'Graphite', lightCanvas: '#fafafa', darkCanvas: '#18181b', accent: '#71717a' },
+  { id: 'indigo', name: 'Indigo', lightCanvas: '#f5f7ff', darkCanvas: '#111827', accent: '#6366f1' },
+  { id: 'violet', name: 'Violet', lightCanvas: '#faf5ff', darkCanvas: '#1f1833', accent: '#a855f7' },
+  { id: 'emerald', name: 'Emerald', lightCanvas: '#f7fffb', darkCanvas: '#07251b', accent: '#10b981' },
+  { id: 'rose', name: 'Rose', lightCanvas: '#fff8fa', darkCanvas: '#2b1018', accent: '#f43f5e' },
+  { id: 'sepia', name: 'Sepia', lightCanvas: '#f7f0df', darkCanvas: '#292117', accent: '#9a6b3f' },
+  { id: 'solarized', name: 'Solarized', lightCanvas: '#fdf6e3', darkCanvas: '#002b36', accent: '#268bd2' },
+  { id: 'gruvbox', name: 'Gruvbox', lightCanvas: '#fbf1c7', darkCanvas: '#282828', accent: '#b57614' },
+] as const;
+
+export function getThemePalette(themeId: import('./types').ThemeId) {
+  return APP_THEMES.find((theme) => theme.id === themeId) || APP_THEMES[0];
+}
+
+export function getThemeCanvas(themeId: import('./types').ThemeId, appearance: 'light' | 'dark') {
+  const palette = getThemePalette(themeId);
+  return appearance === 'dark' ? palette.darkCanvas : palette.lightCanvas;
+}
 
 export const KEYBOARD_SHORTCUTS: Record<string, string> = {
   v: 'select',
@@ -47,6 +80,7 @@ export const KEYBOARD_SHORTCUTS: Record<string, string> = {
   r: 'rectangle',
   e: 'ellipse',
   d: 'diamond',
+  g: 'triangle',
   a: 'arrow',
   c: 'curvedarrow',
   q: 'elbowarrow',

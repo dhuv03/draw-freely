@@ -7,7 +7,7 @@ export function CommandPalette({ onClose }: Props) {
   const { state, dispatch } = useAppContext();
   const [query, setQuery] = useState('');
   const commands = useMemo(() => [
-    ...(['select','hand','rectangle','ellipse','diamond','arrow','line','freedraw','text','eraser'] as Tool[]).map((tool) => ({ label: `Tool: ${tool}`, run: () => dispatch({ type: 'SET_TOOL', tool }) })),
+    ...(['select','hand','rectangle','ellipse','diamond','triangle','arrow','line','freedraw','text','eraser'] as Tool[]).map((tool) => ({ label: `Tool: ${tool}`, run: () => dispatch({ type: 'SET_TOOL', tool }) })),
     { label: 'Undo', run: () => dispatch({ type: 'UNDO' }) },
     { label: 'Redo', run: () => dispatch({ type: 'REDO' }) },
     { label: 'Select all', run: () => dispatch({ type: 'SET_SELECTION', ids: state.elements.filter((el) => !el.isDeleted && !el.locked).map((el) => el.id) }) },

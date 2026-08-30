@@ -137,6 +137,8 @@ export function TextEditor({ viewport, onSubmit }: TextEditorProps) {
     const widthStyle: React.CSSProperties = {};
     if (editingElement && editingElement.width > 30) {
       widthStyle.width = editingElement.width * viewport.zoom;
+    } else if (!editingElement) {
+      widthStyle.width = Math.min(420, window.innerWidth * 0.42);
     }
 
     return {
@@ -145,13 +147,18 @@ export function TextEditor({ viewport, onSubmit }: TextEditorProps) {
       fontSize: scaledFontSize,
       fontFamily: ff,
       color,
+      fontWeight: editingElement?.fontWeight ?? state.defaultElementProps.fontWeight,
+      fontStyle: editingElement?.fontStyle ?? state.defaultElementProps.fontStyle,
+      textDecoration: editingElement?.textDecoration ?? state.defaultElementProps.textDecoration,
+      letterSpacing: `${editingElement?.letterSpacing ?? state.defaultElementProps.letterSpacing ?? 0}px`,
+      backgroundColor: editingElement?.textBackgroundColor ?? state.defaultElementProps.textBackgroundColor,
       lineHeight: String(editingElement?.lineHeight ?? state.defaultElementProps.lineHeight ?? 1.25),
       textAlign: editingElement?.textAlign ?? state.defaultElementProps.textAlign,
       transform: editingElement?.angle ? `rotate(${editingElement.angle}rad)` : 'none',
       transformOrigin: 'top left',
       ...widthStyle,
     };
-  }, [editingId, editingElement, viewport, state.defaultElementProps.lineHeight, state.defaultElementProps.textAlign]);
+  }, [editingId, editingElement, viewport, state.defaultElementProps]);
 
   const style = getStyle();
 
@@ -184,7 +191,7 @@ export function TextEditor({ viewport, onSubmit }: TextEditorProps) {
           id: editingElement.id,
           updates,
         });
-        dispatch({ type: 'SET_TOOL', tool: 'select' });
+        if (!state.toolLocked) dispatch({ type: 'SET_TOOL', tool: 'select' });
         dispatch({ type: 'SET_SELECTION', ids: [editingElement.id] });
       } else {
         try {
@@ -208,13 +215,13 @@ export function TextEditor({ viewport, onSubmit }: TextEditorProps) {
             type: 'text',
             x: pos.x,
             y: pos.y,
-            width: bounds.width,
+            width: Math.max(300, bounds.width),
             height: bounds.height,
             text,
             seed: Math.floor(Math.random() * 100000),
           } as ExcalidrawElement;
           onSubmit(newElement);
-          dispatch({ type: 'SET_TOOL', tool: 'select' });
+          if (!state.toolLocked) dispatch({ type: 'SET_TOOL', tool: 'select' });
           dispatch({ type: 'SET_SELECTION', ids: [newElement.id] });
         } catch {
           // ignore invalid position id
@@ -223,7 +230,7 @@ export function TextEditor({ viewport, onSubmit }: TextEditorProps) {
 
       dispatch({ type: 'SET_EDITING_TEXT', id: null });
     },
-    [editingId, editingElement, dispatch, onSubmit, state.defaultElementProps],
+    [editingId, editingElement, dispatch, onSubmit, state.defaultElementProps, state.toolLocked],
   );
 
   // Auto-focus when editing starts
@@ -238,10 +245,8 @@ export function TextEditor({ viewport, onSubmit }: TextEditorProps) {
       ta.style.width = (editingElement.width * viewport.zoom) + 'px';
       ta.style.height = Math.max(24, ta.scrollHeight) + 'px';
     } else {
-      ta.style.width = 'auto';
       ta.style.height = 'auto';
-      ta.style.width = Math.max(40, ta.scrollWidth) + 'px';
-      ta.style.height = Math.max(24, ta.scrollHeight) + 'px';
+      ta.style.height = Math.max(42, ta.scrollHeight) + 'px';
     }
 
     const raf = requestAnimationFrame(() => {
@@ -279,10 +284,8 @@ export function TextEditor({ viewport, onSubmit }: TextEditorProps) {
       ta.style.height = 'auto';
       ta.style.height = Math.max(24, ta.scrollHeight) + 'px';
     } else {
-      ta.style.width = 'auto';
       ta.style.height = 'auto';
-      ta.style.width = Math.max(40, ta.scrollWidth) + 'px';
-      ta.style.height = Math.max(24, ta.scrollHeight) + 'px';
+      ta.style.height = Math.max(42, ta.scrollHeight) + 'px';
     }
   }, [editingElement]);
 
@@ -319,6 +322,7 @@ export function TextEditor({ viewport, onSubmit }: TextEditorProps) {
       spellCheck={false}
       aria-label="Edit text; press Ctrl+Enter to finish"
       autoComplete="off"
+      placeholder="Type…"
     />
   );
 }

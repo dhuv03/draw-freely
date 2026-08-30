@@ -41,6 +41,8 @@ export function hitTest(el: ExcalidrawElement, point: Point): boolean {
       return hitTestEllipse(el, testedPoint, threshold);
     case 'diamond':
       return hitTestDiamond(el, testedPoint, threshold);
+    case 'triangle':
+      return hitTestTriangle(el, testedPoint, threshold);
     case 'line':
       return hitTestLine(el, testedPoint, threshold);
     case 'arrow': {
@@ -64,6 +66,19 @@ export function hitTest(el: ExcalidrawElement, point: Point): boolean {
     default:
       return false;
   }
+}
+
+function hitTestTriangle(el: ExcalidrawElement, p: Point, t: number): boolean {
+  const { x, y, width, height } = getElementBounds(el);
+  const a = { x: x + width / 2, y };
+  const b = { x: x + width, y: y + height };
+  const c = { x, y: y + height };
+  if (el.fillColor !== 'transparent') {
+    const area = (u: Point, v: Point, w: Point) => Math.abs((u.x * (v.y - w.y) + v.x * (w.y - u.y) + w.x * (u.y - v.y)) / 2);
+    const total = area(a, b, c);
+    return Math.abs(area(p, b, c) + area(a, p, c) + area(a, b, p) - total) < Math.max(1, t);
+  }
+  return isNearSegment(p, a, b, t) || isNearSegment(p, b, c, t) || isNearSegment(p, c, a, t);
 }
 
 // ── Rectangle ────────────────────────────────

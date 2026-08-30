@@ -130,10 +130,13 @@ export function useCanvasEvents(
       const s = stateRef.current;
       const p = ps.current;
       const tool = s.activeTool;
+      dispatch({ type: 'SET_PROPERTIES_OPEN', open: false });
+      const activeLayer = s.layers.find((layer) => layer.id === s.activeLayerId);
+      if (!['select', 'hand', 'eraser'].includes(tool) && (!activeLayer?.visible || activeLayer.locked)) return;
 
       // Text tool: open editor without capturing pointer (allows textarea interaction)
       if (tool === 'text' && e.button === 0) {
-        const hit = hitTestAll(s.elements, cp);
+        const hit = hitTestAll(getInteractiveElements(s), cp);
         if (hit && hit.type === 'text') {
           dispatch({ type: 'SET_EDITING_TEXT', id: hit.id, clickPoint: cp });
         } else {
@@ -259,7 +262,7 @@ export function useCanvasEvents(
         }
 
         // 2. Hit test elements
-        const hit = hitTestAll(s.elements, cp);
+        const hit = hitTestAll(getInteractiveElements(s), cp);
         if (hit) {
           if (hit.locked) return;
           const hitIds = hit.groupId
@@ -301,7 +304,7 @@ export function useCanvasEvents(
       }
 
       // ?? SHAPE TOOLS ?????????????????????
-      if (['rectangle', 'ellipse', 'diamond'].includes(tool)) {
+      if (['rectangle', 'ellipse', 'diamond', 'triangle'].includes(tool)) {
         dispatch({ type: 'SNAPSHOT' });
         const el = createElement(tool as ExcalidrawElement['type'], cp.x, cp.y);
         activeElementRef.current = el;
@@ -337,7 +340,7 @@ export function useCanvasEvents(
 
       // ERASER
       if (tool === 'eraser') {
-        const hit = hitTestAll(s.elements, cp);
+        const hit = hitTestAll(getInteractiveElements(s), cp);
         if (hit) {
           dispatch({ type: 'SNAPSHOT' });
           dispatch({ type: 'DELETE_ELEMENTS', ids: [hit.id] });
@@ -433,7 +436,7 @@ export function useCanvasEvents(
 
           // Shift key ? constrain to square/circle or 45? lines
           if (e.shiftKey) {
-            if (['rectangle', 'ellipse', 'diamond'].includes(el.type)) {
+            if (['rectangle', 'ellipse', 'diamond', 'triangle'].includes(el.type)) {
               const size = Math.max(Math.abs(el.width), Math.abs(el.height));
               el.width = Math.sign(el.width) * size;
               el.height = Math.sign(el.height) * size;
@@ -624,14 +627,14 @@ export function useCanvasEvents(
         forceInteractiveRender(rb);
 
         // Select elements within rubber band
-        const selected = getElementsInRect(s.elements, rb);
+        const selected = getElementsInRect(getInteractiveElements(s), rb);
         dispatch({ type: 'SET_SELECTION', ids: selected.map((el) => el.id) });
         return;
       }
 
       // ?? ERASING ?????????????????????????
       if (p.action === 'erasing') {
-        const hit = hitTestAll(s.elements, cp);
+        const hit = hitTestAll(getInteractiveElements(s), cp);
         if (hit) {
           dispatch({ type: 'DELETE_ELEMENTS', ids: [hit.id] });
         }
@@ -664,9 +667,10 @@ export function useCanvasEvents(
             : Math.abs(el.width) > 1 || Math.abs(el.height) > 1
         ) {
           dispatch({ type: 'ADD_ELEMENT', element: { ...el } });
-          // Switch back to select and select the new element
-          dispatch({ type: 'SET_TOOL', tool: 'select' });
-          dispatch({ type: 'SET_SELECTION', ids: [el.id] });
+          if (!stateRef.current.toolLocked) {
+            dispatch({ type: 'SET_TOOL', tool: 'select' });
+          }
+          dispatch({ type: 'SET_SELECTION', ids: [] });
         }
 
         activeElementRef.current = null;
@@ -877,7 +881,7 @@ export function useCanvasEvents(
 
       const rect = canvas.getBoundingClientRect();
       const cp = screenToCanvas(e.clientX - rect.left, e.clientY - rect.top);
-      const hit = hitTestAll(s.elements, cp);
+      const hit = hitTestAll(getInteractiveElements(s), cp);
       if (hit?.type === 'text') {
         dispatch({ type: 'SET_EDITING_TEXT', id: hit.id, clickPoint: cp });
       } else if (!hit) {
@@ -1033,7 +1037,7 @@ function updateCursor(
           }
         }
       }
-      const hovered = hitTestAll(state.elements, cp);
+      const hovered = hitTestAll(getInteractiveElements(state), cp);
       canvas.style.cursor = hovered && !hovered.locked ? 'move' : hovered?.locked ? 'not-allowed' : 'default';
       break;
     }
@@ -1044,9 +1048,15 @@ function updateCursor(
       canvas.style.cursor = 'text';
       break;
     case 'eraser':
-      canvas.style.cursor = 'crosshair';
+      canvas.style.cursor = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='10' fill='white' fill-opacity='.35' stroke='%231e293b' stroke-width='2'/%3E%3Ccircle cx='16' cy='16' r='2' fill='%231e293b'/%3E%3C/svg%3E") 16 16, crosshair`;
       break;
     default:
       canvas.style.cursor = 'crosshair';
   }
+}
+
+function getInteractiveElements(state: any): ExcalidrawElement[] {
+  const available = new Set(state.layers.filter((layer: any) => layer.visible && !layer.locked).map((layer: any) => layer.id));
+  const layerOrder = new Map(state.layers.map((layer: any, index: number) => [layer.id, index]));
+  return state.elements.filter((el: ExcalidrawElement) => available.has(el.layerId || 'layer-1')).sort((a: ExcalidrawElement, b: ExcalidrawElement) => Number(layerOrder.get(a.layerId || 'layer-1') || 0) - Number(layerOrder.get(b.layerId || 'layer-1') || 0));
 }

@@ -17,6 +17,8 @@ export function PropertiesPanel() {
   );
   const hasSelection = selectedElements.length > 0;
 
+  if (!state.propertiesOpen) return null;
+
   // If no selection and no drawing tool is active, don't show the panel
   if (!hasSelection && ['select', 'hand', 'eraser'].includes(state.activeTool)) {
     return null;
@@ -354,54 +356,33 @@ export function PropertiesPanel() {
 
       {/* Font Size (text only) */}
       {currentType === 'text' && (
-        <div className="prop-section">
-          <span className="prop-label">Font Size</span>
-          <div style={{ display: 'flex', gap: 4 }}>
-            {[16, 20, 28, 36].map((size) => (
-              <button
-                key={size}
-                className={`width-btn ${currentProperties.fontSize === size ? 'active' : ''}`}
-                onClick={() => updateAll({ fontSize: size })}
-                style={{ fontSize: 11 }}
-              >
-                {size}
-              </button>
-            ))}
+        <div className="text-controls">
+          <div className="prop-section">
+            <span className="prop-label">Typography</span>
+            <div className="text-font-row">
+              <select aria-label="Font family" value={currentProperties.fontFamily || 'Virgil'} onChange={(event) => updateAll({ fontFamily: event.target.value })}>
+                <option value="Virgil">Hand drawn</option>
+                <option value="sans-serif">Sans serif</option>
+                <option value="Cascadia">Monospace</option>
+              </select>
+              <input aria-label="Font size" type="number" min="8" max="160" value={currentProperties.fontSize || 20} onChange={(event) => updateAll({ fontSize: Math.max(8, Math.min(160, Number(event.target.value))) })} />
+            </div>
+            <div className="segmented-control text-style-buttons">
+              <button className={`segment-btn ${currentProperties.fontWeight === 'bold' ? 'active' : ''}`} onClick={() => updateAll({ fontWeight: currentProperties.fontWeight === 'bold' ? 'normal' : 'bold' })} aria-label="Bold"><strong>B</strong></button>
+              <button className={`segment-btn ${currentProperties.fontStyle === 'italic' ? 'active' : ''}`} onClick={() => updateAll({ fontStyle: currentProperties.fontStyle === 'italic' ? 'normal' : 'italic' })} aria-label="Italic"><em>I</em></button>
+              <button className={`segment-btn ${currentProperties.textDecoration === 'underline' ? 'active' : ''}`} onClick={() => updateAll({ textDecoration: currentProperties.textDecoration === 'underline' ? 'none' : 'underline' })} aria-label="Underline"><u>U</u></button>
+            </div>
           </div>
+          <div className="prop-section"><span className="prop-label">Alignment</span><div className="segmented-control">{(['left','center','right'] as TextAlign[]).map((value) => <button key={value} className={`segment-btn ${currentProperties.textAlign === value ? 'active' : ''}`} onClick={() => updateAll({ textAlign: value })} aria-label={`Text align ${value}`}>{value}</button>)}</div><div className="segmented-control text-secondary-row">{(['top','middle','bottom'] as VerticalAlign[]).map((value) => <button key={value} className={`segment-btn ${currentProperties.verticalAlign === value ? 'active' : ''}`} onClick={() => updateAll({ verticalAlign: value })}>{value}</button>)}</div></div>
+          <div className="prop-section"><label className="prop-label" htmlFor="line-height">Line height <span>{(currentProperties.lineHeight || 1.25).toFixed(2)}</span></label><input id="line-height" type="range" className="prop-slider" min="1" max="2" step="0.05" value={currentProperties.lineHeight || 1.25} onChange={(event) => updateAll({ lineHeight: Number(event.target.value) })} /></div>
+          <div className="prop-section"><label className="prop-label" htmlFor="letter-spacing">Letter spacing <span>{currentProperties.letterSpacing || 0}px</span></label><input id="letter-spacing" type="range" className="prop-slider" min="-1" max="12" step="0.5" value={currentProperties.letterSpacing || 0} onChange={(event) => updateAll({ letterSpacing: Number(event.target.value) })} /></div>
+          <div className="prop-section"><label className="prop-label" htmlFor="text-background">Text highlight</label><div className="text-highlight-row"><button className={currentProperties.textBackgroundColor === 'transparent' ? 'active' : ''} onClick={() => updateAll({ textBackgroundColor: 'transparent' })}>None</button><input id="text-background" type="color" value={currentProperties.textBackgroundColor === 'transparent' ? '#fff3bf' : currentProperties.textBackgroundColor || '#fff3bf'} onChange={(event) => updateAll({ textBackgroundColor: event.target.value })} /></div></div>
         </div>
       )}
 
-      {currentType === 'text' && <>
-        <div className="prop-section"><span className="prop-label">Text align</span><div className="segmented-control">{(['left','center','right'] as TextAlign[]).map((value) => <button key={value} className={`segment-btn ${currentProperties.textAlign === value ? 'active' : ''}`} onClick={() => updateAll({ textAlign: value })} aria-label={`Text align ${value}`}>{value}</button>)}</div></div>
-        <div className="prop-section"><span className="prop-label">Vertical align</span><div className="segmented-control">{(['top','middle','bottom'] as VerticalAlign[]).map((value) => <button key={value} className={`segment-btn ${currentProperties.verticalAlign === value ? 'active' : ''}`} onClick={() => updateAll({ verticalAlign: value })}>{value}</button>)}</div></div>
-        <div className="prop-section"><label className="prop-label" htmlFor="line-height">Line height</label><input id="line-height" type="range" className="prop-slider" min="1" max="2" step="0.05" value={currentProperties.lineHeight || 1.25} onChange={(event) => updateAll({ lineHeight: Number(event.target.value) })} /></div>
-      </>}
+      {currentType === 'rectangle' && <div className="prop-section"><label className="prop-label" htmlFor="corner-radius">Corner radius <span>{currentProperties.cornerRadius || 0}px</span></label><input id="corner-radius" type="range" className="prop-slider" min="0" max="60" value={currentProperties.cornerRadius || 0} onChange={(event) => updateAll({ cornerRadius: Number(event.target.value) })} /></div>}
 
-      {['rectangle','diamond'].includes(String(currentType)) && <div className="prop-section"><label className="prop-label" htmlFor="corner-radius">Corner radius</label><input id="corner-radius" type="range" className="prop-slider" min="0" max="40" value={currentProperties.cornerRadius || 0} onChange={(event) => updateAll({ cornerRadius: Number(event.target.value) })} /></div>}
 
-      {!hasSelection && <div className="prop-section"><label className="prop-label" htmlFor="canvas-background">Canvas background</label><input id="canvas-background" type="color" value={state.canvasBackground} onChange={(event) => dispatch({ type: 'SET_CANVAS_BACKGROUND', color: event.target.value })} /></div>}
-
-      {/* Font Family (text only) */}
-      {currentType === 'text' && (
-        <div className="prop-section">
-          <span className="prop-label">Font Family</span>
-          <div className="segmented-control">
-            {[
-              { label: 'Hand-drawn', val: 'Virgil' },
-              { label: 'Normal', val: 'sans-serif' },
-              { label: 'Code', val: 'Cascadia' },
-            ].map((font) => (
-              <button
-                key={font.label}
-                className={`segment-btn ${currentProperties.fontFamily === font.val ? 'active' : ''}`}
-                onClick={() => updateAll({ fontFamily: font.val })}
-              >
-                {font.label}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

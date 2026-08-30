@@ -34,7 +34,8 @@ export const InteractiveCanvas = forwardRef<InteractiveCanvasHandle, object>(
         canvas.height = height * dpr;
       }
 
-      const { elements, selectedElementIds, viewport, theme } = stateRef.current;
+      const { elements, layers, selectedElementIds, viewport, theme } = stateRef.current;
+      const visibleLayers = new Set(layers.filter((layer) => layer.visible).map((layer) => layer.id));
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.save();
@@ -49,7 +50,7 @@ export const InteractiveCanvas = forwardRef<InteractiveCanvasHandle, object>(
       // Draw selection bounding boxes and handles
       if (selectedElementIds.length > 0) {
         const selectedElements = elements.filter((el) =>
-          selectedElementIds.includes(el.id) && !el.isDeleted,
+          visibleLayers.has(el.layerId || 'layer-1') && selectedElementIds.includes(el.id) && !el.isDeleted,
         );
 
           const selColor = '#3B82F6';
@@ -173,7 +174,7 @@ export const InteractiveCanvas = forwardRef<InteractiveCanvasHandle, object>(
 
     useEffect(() => {
       requestAnimationFrame(render);
-    }, [render, state.selectedElementIds, state.elements, state.viewport, state.theme]);
+    }, [render, state.selectedElementIds, state.elements, state.layers, state.viewport, state.theme]);
 
     useEffect(() => {
       const onResize = () => requestAnimationFrame(render);

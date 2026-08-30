@@ -41,7 +41,9 @@ export const StaticCanvas = forwardRef<StaticCanvasHandle, StaticCanvasProps>(
         canvas.height = height * dpr;
       }
 
-      const { elements, viewport, theme, canvasBackground } = stateRef.current;
+      const { elements, layers, viewport, theme, canvasBackground, canvasPattern, patternOpacity } = stateRef.current;
+      const visibleLayers = new Set(layers.filter((layer) => layer.visible).map((layer) => layer.id));
+      const layerOrder = new Map(layers.map((layer, index) => [layer.id, index]));
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.save();
@@ -56,13 +58,13 @@ export const StaticCanvas = forwardRef<StaticCanvasHandle, StaticCanvasProps>(
       ctx.scale(viewport.zoom, viewport.zoom);
 
       // Draw a subtle dot grid
-      drawGrid(ctx, viewport, width, height, theme);
+      drawGrid(ctx, viewport, width, height, theme, canvasPattern, patternOpacity);
 
       // RoughJS canvas (shares the transformed 2D context)
       const rc = rough.canvas(canvas);
 
       // Render committed elements
-      for (const el of elements) {
+      for (const el of elements.filter((item) => visibleLayers.has(item.layerId || 'layer-1')).sort((a, b) => (layerOrder.get(a.layerId || 'layer-1') || 0) - (layerOrder.get(b.layerId || 'layer-1') || 0))) {
         if (el.isDeleted) continue;
         if (el.id === stateRef.current.editingTextId) continue;
         const visibleElement = theme === 'dark' && ['#000000', '#000', '#1e1e1e'].includes(el.strokeColor.toLowerCase())
@@ -86,7 +88,7 @@ export const StaticCanvas = forwardRef<StaticCanvasHandle, StaticCanvasProps>(
     // Re-render when state changes
     useEffect(() => {
       requestAnimationFrame(render);
-    }, [render, state.elements, state.viewport, state.theme, state.canvasBackground, state.editingTextId]);
+    }, [render, state.elements, state.layers, state.viewport, state.theme, state.canvasBackground, state.canvasPattern, state.patternOpacity, state.editingTextId]);
 
     // Handle window resize
     useEffect(() => {
@@ -118,12 +120,15 @@ function drawGrid(
   screenWidth: number,
   screenHeight: number,
   theme: string,
+  pattern: 'blank' | 'ruled' | 'grid' | 'dotted',
+  opacity: number,
 ) {
-  const gridSize = 20;
+  if (pattern === 'blank') return;
+  const gridSize = 40;
   if (viewport.zoom < 0.3) return; // Don't draw grid when zoomed out too far
 
-  const dotSize = 1;
-  ctx.fillStyle = theme === 'dark' ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.08)';
+  const alpha = Math.max(.04, Math.min(.55, opacity));
+  const color = theme === 'dark' ? `rgba(255,255,255,${alpha})` : `rgba(15,23,42,${alpha})`;
 
   // Compute visible range in canvas coordinates
   const startX = Math.floor((-viewport.scrollX / viewport.zoom - 10) / gridSize) * gridSize;
@@ -131,9 +136,15 @@ function drawGrid(
   const endX = startX + screenWidth / viewport.zoom + gridSize * 2;
   const endY = startY + screenHeight / viewport.zoom + gridSize * 2;
 
-  for (let x = startX; x < endX; x += gridSize) {
-    for (let y = startY; y < endY; y += gridSize) {
-      ctx.fillRect(x - dotSize / 2, y - dotSize / 2, dotSize, dotSize);
-    }
+  ctx.strokeStyle = color;
+  ctx.fillStyle = color;
+  ctx.lineWidth = 1 / viewport.zoom;
+  if (pattern === 'ruled') {
+    for (let y = startY; y < endY; y += gridSize) { ctx.beginPath(); ctx.moveTo(startX, y); ctx.lineTo(endX, y); ctx.stroke(); }
+  } else if (pattern === 'grid') {
+    for (let x = startX; x < endX; x += gridSize) { ctx.beginPath(); ctx.moveTo(x, startY); ctx.lineTo(x, endY); ctx.stroke(); }
+    for (let y = startY; y < endY; y += gridSize) { ctx.beginPath(); ctx.moveTo(startX, y); ctx.lineTo(endX, y); ctx.stroke(); }
+  } else {
+    for (let x = startX; x < endX; x += gridSize) for (let y = startY; y < endY; y += gridSize) ctx.fillRect(x - 1.6, y - 1.6, 3.2, 3.2);
   }
 }
