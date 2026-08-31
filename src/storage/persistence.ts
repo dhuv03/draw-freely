@@ -128,10 +128,15 @@ export function debouncedSave(data: {
 
 // ── Export PNG ────────────────────────────────
 
-export function exportPNG(elements: ExcalidrawElement[], theme: 'light' | 'dark') {
+function announceExport(detail: { state:'working'|'success'|'error'; message:string }) {
+  window.dispatchEvent(new CustomEvent('drawfreely:export-status', { detail }));
+}
+
+export async function exportPNG(elements: ExcalidrawElement[], theme: 'light' | 'dark') {
   const padding = 40;
   const filtered = elements.filter((el) => !el.isDeleted);
-  if (filtered.length === 0) return;
+  if (filtered.length === 0) { announceExport({ state:'error', message:'Nothing to export yet.' }); return false; }
+  announceExport({ state:'working', message:'Preparing PNG…' });
 
   // Compute bounding box of all elements
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
@@ -145,14 +150,21 @@ export function exportPNG(elements: ExcalidrawElement[], theme: 'light' | 'dark'
 
   const width = maxX - minX + padding * 2;
   const height = maxY - minY + padding * 2;
+  if (![width,height,minX,minY,maxX,maxY].every(Number.isFinite) || width <= 0 || height <= 0) {
+    announceExport({ state:'error', message:'The drawing has invalid bounds and could not be exported.' });
+    return false;
+  }
 
   const canvas = document.createElement('canvas');
-  const dpr = 2; // Export at 2x for crisp output
-  canvas.width = width * dpr;
-  canvas.height = height * dpr;
+  const dpr = 2;
+  const maxDimension = 8192;
+  const maxPixels = 40_000_000;
+  const exportScale = Math.min(1, maxDimension / (width * dpr), maxDimension / (height * dpr), Math.sqrt(maxPixels / (width * height * dpr * dpr)));
+  canvas.width = Math.max(1, Math.floor(width * dpr * exportScale));
+  canvas.height = Math.max(1, Math.floor(height * dpr * exportScale));
 
   const ctx = canvas.getContext('2d')!;
-  ctx.scale(dpr, dpr);
+  ctx.scale(dpr * exportScale, dpr * exportScale);
 
   // Background
   ctx.fillStyle = theme === 'dark' ? '#0f0f1a' : '#ffffff';
@@ -166,15 +178,24 @@ export function exportPNG(elements: ExcalidrawElement[], theme: 'light' | 'dark'
     renderElement(ctx, el, rc);
   }
 
-  canvas.toBlob((blob) => {
-    if (!blob) return;
+  try {
+    const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob((result) => result ? resolve(result) : reject(new Error('PNG encoding failed')), 'image/png'));
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
     a.download = 'drawfreely-export.png';
+    a.style.display = 'none';
+    document.body.appendChild(a);
     a.click();
-    URL.revokeObjectURL(url);
-  }, 'image/png');
+    a.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    announceExport({ state:'success', message:`PNG downloaded (${canvas.width} × ${canvas.height}).` });
+    return true;
+  } catch (error) {
+    console.error('PNG export failed:', error);
+    announceExport({ state:'error', message:'PNG export failed. Try bringing distant content closer together.' });
+    return false;
+  }
 }
 
 // ── Export SVG ────────────────────────────────

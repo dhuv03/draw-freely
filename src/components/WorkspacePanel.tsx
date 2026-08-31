@@ -23,6 +23,12 @@ export function WorkspacePanel({ onOpenSettings }: { onOpenSettings: () => void 
   const [overflowOpen, setOverflowOpen] = useState(false);
   const themeWrapRef = useRef<HTMLDivElement>(null);
   const palette = getThemePalette(state.themeId);
+  useEffect(() => {
+    const mobile = window.matchMedia('(max-width: 900px)');
+    const collapseOnMobile = (event: MediaQueryListEvent) => { if (event.matches) setCollapsed(true); };
+    mobile.addEventListener('change', collapseOnMobile);
+    return () => mobile.removeEventListener('change', collapseOnMobile);
+  }, []);
   useEffect(() => { const close = (event: PointerEvent) => { const target = event.target as Element; if (!themeWrapRef.current?.contains(target) && !target.closest?.('.workspace-theme-wrap')) setThemeOpen(false); if (!target.closest?.('.workspace-overflow-wrap')) setOverflowOpen(false); }; window.addEventListener('pointerdown', close); return () => window.removeEventListener('pointerdown', close); }, []);
   const setAppearance = (mode: AppearanceMode) => {
     const resolvedTheme = mode === 'system' ? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : mode;

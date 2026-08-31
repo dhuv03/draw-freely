@@ -32,6 +32,21 @@ export default function App() {
   const [showCommands, setShowCommands] = useState(false);
   const [hydrated, setHydrated] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [exportStatus, setExportStatus] = useState<{ state:'working'|'success'|'error'; message:string } | null>(null);
+
+  useEffect(() => {
+    let clearTimer: number | undefined;
+    const onExportStatus = (event: Event) => {
+      const detail = (event as CustomEvent<{ state:'working'|'success'|'error'; message:string }>).detail;
+      setExportStatus(detail);
+      if (detail.state !== 'working') {
+        window.clearTimeout(clearTimer);
+        clearTimer = window.setTimeout(() => setExportStatus(null), 3500);
+      }
+    };
+    window.addEventListener('drawfreely:export-status', onExportStatus);
+    return () => { window.removeEventListener('drawfreely:export-status', onExportStatus); window.clearTimeout(clearTimer); };
+  }, []);
 
   // Hook up all canvas events
   useCanvasEvents(
@@ -182,6 +197,7 @@ export default function App() {
       {contextMenu && <ContextMenu {...contextMenu} onClose={() => setContextMenu(null)} />}
       {showCommands && <CommandPalette onClose={() => setShowCommands(false)} />}
       {!hydrated && <div className="canvas-loading" role="status">Restoring drawing…</div>}
+      {exportStatus && <div className={`export-status export-${exportStatus.state}`} role="status" aria-live="polite">{exportStatus.message}</div>}
     </div>
   );
 }

@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { useAppContext } from '../AppContext';
 import type { Tool } from '../types';
 import { exportPNG } from '../storage/persistence';
@@ -28,6 +29,7 @@ export function Toolbar() {
   const { state, dispatch } = useAppContext();
   const [showShapes, setShowShapes] = useState(false);
   const [shapeDirection, setShapeDirection] = useState<'above'|'below'|'left'|'right'>('below');
+  const [shapePosition, setShapePosition] = useState<CSSProperties>({});
   const dragRef = useRef<{ dx: number; dy: number; pointerId:number } | null>(null);
   const toolbarRef = useRef<HTMLDivElement>(null);
   const shapeButtonRef = useRef<HTMLButtonElement>(null);
@@ -85,8 +87,20 @@ export function Toolbar() {
   const updateShapeDirection = useCallback(() => {
     const rect = shapeButtonRef.current?.getBoundingClientRect();
     if (!rect) return;
-    if (state.toolbarOrientation === 'vertical') setShapeDirection(window.innerWidth - rect.right >= 190 ? 'right' : 'left');
-    else setShapeDirection(window.innerHeight - rect.bottom >= 105 ? 'below' : 'above');
+    const gap = 9, popoverWidth = 176, popoverHeight = 92, edge = 8;
+    let direction: 'above'|'below'|'left'|'right';
+    let left: number, top: number;
+    if (state.toolbarOrientation === 'vertical') {
+      direction = window.innerWidth - rect.right >= popoverWidth + gap + edge ? 'right' : 'left';
+      left = direction === 'right' ? rect.right + gap : rect.left - popoverWidth - gap;
+      top = rect.top + rect.height / 2 - popoverHeight / 2;
+    } else {
+      direction = window.innerHeight - rect.bottom >= popoverHeight + gap + edge ? 'below' : 'above';
+      left = rect.left + rect.width / 2 - popoverWidth / 2;
+      top = direction === 'below' ? rect.bottom + gap : rect.top - popoverHeight - gap;
+    }
+    setShapeDirection(direction);
+    setShapePosition({ left:Math.max(edge, Math.min(window.innerWidth - popoverWidth - edge, left)), top:Math.max(edge, Math.min(window.innerHeight - popoverHeight - edge, top)) });
   }, [state.toolbarOrientation]);
   useLayoutEffect(() => { if (showShapes) updateShapeDirection(); }, [showShapes, state.toolbarPosition, state.toolbarOrientation, updateShapeDirection]);
   useEffect(() => { if (!showShapes) return; window.addEventListener('resize', updateShapeDirection); return () => window.removeEventListener('resize', updateShapeDirection); }, [showShapes, updateShapeDirection]);
@@ -107,7 +121,7 @@ export function Toolbar() {
   return <div ref={toolbarRef} className={`toolbar glass-panel toolbar-${state.toolbarOrientation}`} style={{ left: state.toolbarPosition.x, top: state.toolbarPosition.y }} role="toolbar" aria-label="Drawing tools">
     <button className="toolbar-drag-handle" aria-label="Move toolbar" title="Move toolbar" onPointerDown={startDrag} onPointerMove={moveDrag} onPointerUp={stopDrag} onPointerCancel={stopDrag} onLostPointerCapture={stopDrag}><span>⠿</span></button>
     {PRIMARY.slice(0, 3).map(renderTool)}
-    <div className="shape-tool-wrap"><button ref={shapeButtonRef} className={`toolbar-btn ${shapeActive ? 'active' : ''}`} onPointerUp={toggleShapes} aria-expanded={showShapes} aria-label="Shapes" title="Shapes">{shapeActive ? TOOL_META[state.activeTool].icon : <Icon><rect x="3" y="4" width="8" height="8" rx="1"/><circle cx="17" cy="8" r="4"/><path d="m7 15 4 6H3zM14 20l7-7"/></Icon>}<span className="shape-caret">›</span></button>{showShapes && <div className={`shape-popover shape-${shapeDirection} glass-panel`} role="menu" aria-label="Shapes">{SHAPES.filter((tool) => !state.hiddenTools.includes(tool)).map((tool) => <button key={tool} onClick={() => chooseTool(tool)} className={state.activeTool === tool ? 'active' : ''} title={TOOL_META[tool].label}>{TOOL_META[tool].icon}<span>{TOOL_META[tool].label}</span></button>)}</div>}</div>
+    <div className="shape-tool-wrap"><button ref={shapeButtonRef} className={`toolbar-btn ${shapeActive ? 'active' : ''}`} onPointerUp={toggleShapes} aria-expanded={showShapes} aria-label="Shapes" title="Shapes">{shapeActive ? TOOL_META[state.activeTool].icon : <Icon><rect x="3" y="4" width="8" height="8" rx="1"/><circle cx="17" cy="8" r="4"/><path d="m7 15 4 6H3zM14 20l7-7"/></Icon>}<span className="shape-caret">›</span></button>{showShapes && createPortal(<div className={`shape-popover shape-fixed shape-${shapeDirection} glass-panel`} style={shapePosition} role="menu" aria-label="Shapes">{SHAPES.filter((tool) => !state.hiddenTools.includes(tool)).map((tool) => <button key={tool} onClick={() => chooseTool(tool)} className={state.activeTool === tool ? 'active' : ''} title={TOOL_META[tool].label}>{TOOL_META[tool].icon}<span>{TOOL_META[tool].label}</span></button>)}</div>, document.body)}</div>
     {PRIMARY.slice(3).map(renderTool)}
     <div className="toolbar-separator toolbar-action-separator" />
     <button className="toolbar-btn toolbar-action" onClick={() => dispatch({ type:'UNDO' })} disabled={!state.history.past.length} aria-label="Undo"><Icon><path d="M3 7v6h6"/><path d="M5.5 17a9 9 0 1 0 .5-10L3 10"/></Icon></button>
