@@ -266,7 +266,12 @@ export function useCanvasEvents(
             const center = { x:selEl.x + selEl.width / 2, y:selEl.y + selEl.height / 2 };
             const rotatePoint = transformElementPoint(selEl, { x: bounds.x + bounds.width / 2, y: bounds.y - 24 / s.viewport.zoom });
             if (Math.hypot(cp.x - rotatePoint.x, cp.y - rotatePoint.y) <= 10 / s.viewport.zoom) {
-              dispatch({ type: 'SNAPSHOT' }); p.action = 'rotating'; (p as PointerState & { rotationCenter?: Point }).rotationCenter = center; return;
+              dispatch({ type: 'SNAPSHOT' });
+              p.action = 'rotating';
+              (p as any).rotationCenter = center;
+              (p as any).rotationStartAngle = selEl.angle || 0;
+              (p as any).rotationStartPointerAngle = Math.atan2(cp.y - center.y, cp.x - center.x);
+              return;
             }
             const handle = hitTestResizeHandles(bounds, cp, s.viewport.zoom, selEl.type === 'text', selEl.angle || 0, center);
             if (handle) {
@@ -591,7 +596,13 @@ export function useCanvasEvents(
         const id = s.selectedElementIds[0];
         const center = (p as PointerState & { rotationCenter?: Point }).rotationCenter;
         if (id && center) {
-          let angle = Math.atan2(cp.y - center.y, cp.x - center.x) + Math.PI / 2;
+          const pointerAngle = Math.atan2(cp.y - center.y, cp.x - center.x);
+          const startPointerAngle = (p as any).rotationStartPointerAngle ?? pointerAngle;
+          const startAngle = (p as any).rotationStartAngle ?? 0;
+          let delta = pointerAngle - startPointerAngle;
+          while (delta > Math.PI) delta -= Math.PI * 2;
+          while (delta < -Math.PI) delta += Math.PI * 2;
+          let angle = startAngle + delta;
           if (e.shiftKey) angle = Math.round(angle / (Math.PI / 12)) * (Math.PI / 12);
           dispatch({ type: 'UPDATE_ELEMENT', id, updates: { angle } }); forceInteractiveRender();
         }

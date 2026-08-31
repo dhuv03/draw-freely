@@ -82,7 +82,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       };
 
     case 'SET_SELECTION':
-      return { ...state, selectedElementIds: action.ids, propertiesOpen: action.ids.length > 0 };
+      return { ...state, selectedElementIds: action.ids };
 
     case 'SNAPSHOT': {
       const past = [
