@@ -446,12 +446,27 @@ export function getElementBounds(el: ExcalidrawElement): Bounds {
       maxX = Math.max(maxX, px);
       maxY = Math.max(maxY, py);
     }
-    return {
+    const bounds = {
       x: el.x + minX,
       y: el.y + minY,
       width: maxX - minX || 1,
       height: maxY - minY || 1,
     };
+    if (!el.angle) return bounds;
+    const center = { x: el.x + el.width / 2, y: el.y + el.height / 2 };
+    const cos = Math.cos(el.angle), sin = Math.sin(el.angle);
+    const corners = [
+      { x:bounds.x, y:bounds.y }, { x:bounds.x + bounds.width, y:bounds.y },
+      { x:bounds.x + bounds.width, y:bounds.y + bounds.height }, { x:bounds.x, y:bounds.y + bounds.height },
+    ].map((point) => ({
+      x:center.x + (point.x - center.x) * cos - (point.y - center.y) * sin,
+      y:center.y + (point.x - center.x) * sin + (point.y - center.y) * cos,
+    }));
+    const rotatedMinX = Math.min(...corners.map((point) => point.x));
+    const rotatedMaxX = Math.max(...corners.map((point) => point.x));
+    const rotatedMinY = Math.min(...corners.map((point) => point.y));
+    const rotatedMaxY = Math.max(...corners.map((point) => point.y));
+    return { x:rotatedMinX, y:rotatedMinY, width:rotatedMaxX - rotatedMinX, height:rotatedMaxY - rotatedMinY };
   }
 
   if (el.type === 'text') {

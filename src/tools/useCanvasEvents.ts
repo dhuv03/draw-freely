@@ -275,6 +275,8 @@ export function useCanvasEvents(
               (p as any).startWidth = selEl.width;
               (p as any).startHeight = bounds.height;
               (p as any).startFontSize = selEl.fontSize || 20;
+              (p as any).startPoints = selEl.points?.map((point) => [...point]);
+              (p as any).startBounds = bounds;
               return;
             }
           }
@@ -647,7 +649,11 @@ export function useCanvasEvents(
             dispatch({ type: 'UPDATE_ELEMENT', id: el.id, updates });
           }
         } else {
-          applyResize(el, p.resizeHandle, dx, dy, dispatch);
+          const startPoints = (p as any).startPoints as [number, number][] | undefined;
+          const startBounds = (p as any).startBounds as { x:number; y:number; width:number; height:number } | undefined;
+          if ((el.type === 'line' || el.type === 'arrow') && startPoints && startBounds) {
+            resizeLinearElement(el, p.resizeHandle, cp, p.startCanvas, startPoints, startBounds, dispatch);
+          } else applyResize(el, p.resizeHandle, dx, dy, dispatch);
         }
         forceStaticRender();
         forceInteractiveRender();
@@ -972,6 +978,28 @@ export function useCanvasEvents(
       window.removeEventListener('keyup', handleKeyUp);
     };
   }, [handleKeyDown, handleKeyUp]);
+}
+
+function resizeLinearElement(
+  el: ExcalidrawElement,
+  handle: ResizeHandle,
+  point: Point,
+  start: Point,
+  points: [number, number][],
+  bounds: { x:number; y:number; width:number; height:number },
+  dispatch: React.Dispatch<any>,
+) {
+  let left = bounds.x, right = bounds.x + bounds.width, top = bounds.y, bottom = bounds.y + bounds.height;
+  if (handle.includes('w')) left += point.x - start.x;
+  if (handle.includes('e')) right += point.x - start.x;
+  if (handle.includes('n')) top += point.y - start.y;
+  if (handle.includes('s')) bottom += point.y - start.y;
+  const width = Math.max(1, right - left), height = Math.max(1, bottom - top);
+  const scaled = points.map(([x, y]) => [
+    left - el.x + ((el.x + x - bounds.x) / Math.max(1, bounds.width)) * width,
+    top - el.y + ((el.y + y - bounds.y) / Math.max(1, bounds.height)) * height,
+  ] as [number, number]);
+  dispatch({ type:'UPDATE_ELEMENT', id:el.id, updates:{ points:scaled, width, height } });
 }
 
 function applyResize(
