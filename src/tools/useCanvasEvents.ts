@@ -78,6 +78,8 @@ export function useCanvasEvents(
   const stateRef = useRef(state);
   useLayoutEffect(() => { stateRef.current = state; }, [state]);
   const ps = useRef<PointerState>(initialPointerState());
+  const touchPoints = useRef(new Map<number, Point>());
+  const pinch = useRef<null | { distance: number; canvasPoint: Point }>(null);
 
   // ?? Coordinate conversion ??????????????????
   const screenToCanvas = useCallback((sx: number, sy: number): Point => {
@@ -130,6 +132,23 @@ export function useCanvasEvents(
       const s = stateRef.current;
       const p = ps.current;
       const tool = s.activeTool;
+
+      if (e.pointerType === 'touch') {
+        touchPoints.current.set(e.pointerId, { x: sx, y: sy });
+        if (touchPoints.current.size === 2) {
+          const [a, b] = [...touchPoints.current.values()];
+          const center = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+          pinch.current = {
+            distance: Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)),
+            canvasPoint: screenToCanvas(center.x, center.y),
+          };
+          activeElementRef.current = null;
+          Object.assign(ps.current, initialPointerState());
+          (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+          forceStaticRender();
+          return;
+        }
+      }
       dispatch({ type: 'SET_PROPERTIES_OPEN', open: false });
       const activeLayer = s.layers.find((layer) => layer.id === s.activeLayerId);
       if (!['select', 'hand', 'eraser'].includes(tool) && (!activeLayer?.visible || activeLayer.locked)) return;
@@ -366,6 +385,24 @@ export function useCanvasEvents(
       const rect = canvas.getBoundingClientRect();
       const sx = e.clientX - rect.left;
       const sy = e.clientY - rect.top;
+
+      if (e.pointerType === 'touch' && touchPoints.current.has(e.pointerId)) {
+        touchPoints.current.set(e.pointerId, { x: sx, y: sy });
+        if (touchPoints.current.size >= 2 && pinch.current) {
+          const [a, b] = [...touchPoints.current.values()];
+          const center = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+          const distance = Math.max(1, Math.hypot(a.x - b.x, a.y - b.y));
+          const currentZoom = stateRef.current.viewport.zoom;
+          const zoom = Math.max(ZOOM_LIMITS.min, Math.min(ZOOM_LIMITS.max, currentZoom * (distance / pinch.current.distance)));
+          pinch.current.distance = distance;
+          dispatch({ type: 'SET_VIEWPORT', viewport: {
+            zoom,
+            scrollX: center.x - pinch.current.canvasPoint.x * zoom,
+            scrollY: center.y - pinch.current.canvasPoint.y * zoom,
+          } });
+          return;
+        }
+      }
       const cp = screenToCanvas(sx, sy);
       const s = stateRef.current;
       const p = ps.current;
@@ -653,7 +690,11 @@ export function useCanvasEvents(
   // POINTER UP
   // ??????????????????????????????????????????
   const handlePointerUp = useCallback(
-    () => {
+    (e: PointerEvent) => {
+      if (e.pointerType === 'touch') {
+        touchPoints.current.delete(e.pointerId);
+        if (touchPoints.current.size < 2) pinch.current = null;
+      }
       const p = ps.current;
       const canvas = interactiveCanvasRef.current;
 
@@ -667,9 +708,6 @@ export function useCanvasEvents(
             : Math.abs(el.width) > 1 || Math.abs(el.height) > 1
         ) {
           dispatch({ type: 'ADD_ELEMENT', element: { ...el } });
-          if (!stateRef.current.toolLocked) {
-            dispatch({ type: 'SET_TOOL', tool: 'select' });
-          }
           dispatch({ type: 'SET_SELECTION', ids: [] });
         }
 

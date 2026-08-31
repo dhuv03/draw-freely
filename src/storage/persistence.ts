@@ -37,7 +37,6 @@ export async function saveToDB(data: {
   appearanceMode?: AppearanceMode;
   canvasBackground?: string;
   themeId?: ThemeId;
-  toolLocked?: boolean;
   canvasPattern?: CanvasPattern;
   hiddenTools?: Tool[];
   toolbarOrientation?: ToolbarOrientation;
@@ -56,7 +55,6 @@ export async function saveToDB(data: {
     if (data.appearanceMode) await store.put(data.appearanceMode, 'appearanceMode');
     if (data.canvasBackground) await store.put(data.canvasBackground, 'canvasBackground');
     if (data.themeId) await store.put(data.themeId, 'themeId');
-    if (typeof data.toolLocked === 'boolean') await store.put(data.toolLocked, 'toolLocked');
     if (data.canvasPattern) await store.put(data.canvasPattern, 'canvasPattern');
     if (data.hiddenTools) await store.put(data.hiddenTools, 'hiddenTools');
     if (data.toolbarOrientation) await store.put(data.toolbarOrientation, 'toolbarOrientation');
@@ -77,7 +75,6 @@ export async function loadFromDB(): Promise<{
   appearanceMode?: AppearanceMode;
   canvasBackground?: string;
   themeId?: ThemeId;
-  toolLocked?: boolean;
   canvasPattern?: CanvasPattern;
   hiddenTools?: Tool[];
   toolbarOrientation?: ToolbarOrientation;
@@ -88,7 +85,7 @@ export async function loadFromDB(): Promise<{
     const db = await getDB();
     const tx = db.transaction(STORE_NAME, 'readonly');
     const store = tx.objectStore(STORE_NAME);
-    const [elements, layers, activeLayerId, viewport, theme, appearanceMode, canvasBackground, themeId, toolLocked, canvasPattern, hiddenTools, toolbarOrientation, toolbarPosition, patternOpacity] = await Promise.all([
+    const [elements, layers, activeLayerId, viewport, theme, appearanceMode, canvasBackground, themeId, canvasPattern, hiddenTools, toolbarOrientation, toolbarPosition, patternOpacity] = await Promise.all([
       store.get('elements'),
       store.get('layers'),
       store.get('activeLayerId'),
@@ -97,10 +94,9 @@ export async function loadFromDB(): Promise<{
       store.get('appearanceMode'),
       store.get('canvasBackground'),
       store.get('themeId'),
-      store.get('toolLocked'),
       store.get('canvasPattern'), store.get('hiddenTools'), store.get('toolbarOrientation'), store.get('toolbarPosition'), store.get('patternOpacity'),
     ]);
-    return { elements, layers, activeLayerId, viewport, theme, appearanceMode, canvasBackground, themeId, toolLocked, canvasPattern, hiddenTools, toolbarOrientation, toolbarPosition, patternOpacity };
+    return { elements, layers, activeLayerId, viewport, theme, appearanceMode, canvasBackground, themeId, canvasPattern, hiddenTools, toolbarOrientation, toolbarPosition, patternOpacity };
   } catch (err) {
     console.warn('Failed to load from IndexedDB:', err);
     return {};
@@ -120,7 +116,6 @@ export function debouncedSave(data: {
   appearanceMode?: AppearanceMode;
   canvasBackground?: string;
   themeId?: ThemeId;
-  toolLocked?: boolean;
   canvasPattern?: CanvasPattern;
   hiddenTools?: Tool[];
   toolbarOrientation?: ToolbarOrientation;

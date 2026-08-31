@@ -12,12 +12,11 @@ export const initialState: AppState = {
   layers: [{ id: 'layer-1', name: 'Layer 1', visible: true, locked: false }],
   activeLayerId: 'layer-1',
   selectedElementIds: [],
-  activeTool: 'select',
+  activeTool: 'freedraw',
   viewport: { zoom: 1, scrollX: 0, scrollY: 0 },
   theme: 'light',
   appearanceMode: 'system',
   themeId: 'slate',
-  toolLocked: true,
   canvasPattern: 'dotted',
   hiddenTools: [],
   toolbarOrientation: 'horizontal',
@@ -143,9 +142,6 @@ export function appReducer(state: AppState, action: AppAction): AppState {
 
     case 'SET_THEME_ID':
       return { ...state, themeId: action.themeId, theme: action.appearance, canvasBackground: action.canvasBackground };
-
-    case 'SET_TOOL_LOCKED':
-      return { ...state, toolLocked: action.locked };
 
     case 'SET_CANVAS_PATTERN':
       return { ...state, canvasPattern: action.pattern };

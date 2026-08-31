@@ -58,7 +58,6 @@ export default function App() {
         : appearanceMode;
       dispatch({ type: 'SET_THEME_ID', themeId, appearance: resolvedTheme, canvasBackground: data.canvasBackground || getThemeCanvas(themeId, resolvedTheme) });
       dispatch({ type: 'SET_APPEARANCE_MODE', mode: appearanceMode, resolvedTheme, canvasBackground: data.canvasBackground || getThemeCanvas(themeId, resolvedTheme) });
-      if (typeof data.toolLocked === 'boolean') dispatch({ type: 'SET_TOOL_LOCKED', locked: data.toolLocked });
       if (data.canvasPattern) dispatch({ type: 'SET_CANVAS_PATTERN', pattern: data.canvasPattern });
       if (data.hiddenTools) dispatch({ type: 'SET_HIDDEN_TOOLS', tools: data.hiddenTools });
       if (data.toolbarOrientation) dispatch({ type: 'SET_TOOLBAR_ORIENTATION', orientation: data.toolbarOrientation });
@@ -79,14 +78,13 @@ export default function App() {
       appearanceMode: state.appearanceMode,
       canvasBackground: state.canvasBackground,
       themeId: state.themeId,
-      toolLocked: state.toolLocked,
       canvasPattern: state.canvasPattern,
       hiddenTools: state.hiddenTools,
       toolbarOrientation: state.toolbarOrientation,
       toolbarPosition: state.toolbarPosition,
       patternOpacity: state.patternOpacity,
     });
-  }, [hydrated, state.elements, state.layers, state.activeLayerId, state.viewport, state.theme, state.appearanceMode, state.canvasBackground, state.themeId, state.toolLocked, state.canvasPattern, state.hiddenTools, state.toolbarOrientation, state.toolbarPosition, state.patternOpacity]);
+  }, [hydrated, state.elements, state.layers, state.activeLayerId, state.viewport, state.theme, state.appearanceMode, state.canvasBackground, state.themeId, state.canvasPattern, state.hiddenTools, state.toolbarOrientation, state.toolbarPosition, state.patternOpacity]);
 
   useEffect(() => {
     if (!hydrated || state.appearanceMode !== 'system') return;

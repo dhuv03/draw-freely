@@ -1,6 +1,7 @@
-import { useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
+import { useCallback, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { useAppContext } from '../AppContext';
 import type { Tool } from '../types';
+import { exportPNG } from '../storage/persistence';
 
 const Icon = ({ children }: { children: ReactNode }) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">{children}</svg>;
 
@@ -27,6 +28,7 @@ export function Toolbar() {
   const { state, dispatch } = useAppContext();
   const [showShapes, setShowShapes] = useState(false);
   const dragRef = useRef<{ dx: number; dy: number } | null>(null);
+  const toolbarRef = useRef<HTMLDivElement>(null);
   const shapeActive = SHAPES.includes(state.activeTool);
 
   const chooseTool = (tool: Tool) => {
@@ -34,21 +36,43 @@ export function Toolbar() {
     else { dispatch({ type: 'SET_TOOL', tool }); dispatch({ type: 'SET_PROPERTIES_OPEN', open: true }); }
     if (SHAPES.includes(tool)) setShowShapes(false);
   };
+  const clampPosition = useCallback((x: number, y: number) => {
+    const rect = toolbarRef.current?.getBoundingClientRect();
+    const width = rect?.width || 54;
+    const height = rect?.height || 54;
+    const reservedRight = window.innerWidth > 900 ? 82 : 8;
+    return {
+      x: Math.max(8, Math.min(Math.max(8, window.innerWidth - width - reservedRight), x)),
+      y: Math.max(12, Math.min(Math.max(12, window.innerHeight - height - 12), y)),
+    };
+  }, []);
+  useLayoutEffect(() => {
+    const recover = () => {
+      if (window.innerWidth <= 900) return;
+      const next = clampPosition(state.toolbarPosition.x, state.toolbarPosition.y);
+      if (next.x !== state.toolbarPosition.x || next.y !== state.toolbarPosition.y) dispatch({ type:'SET_TOOLBAR_POSITION', position:next });
+    };
+    recover();
+    window.addEventListener('resize', recover);
+    return () => window.removeEventListener('resize', recover);
+  }, [clampPosition, dispatch, state.toolbarPosition.x, state.toolbarPosition.y]);
   const startDrag = (event: ReactPointerEvent<HTMLButtonElement>) => { event.currentTarget.setPointerCapture(event.pointerId); dragRef.current = { dx: event.clientX - state.toolbarPosition.x, dy: event.clientY - state.toolbarPosition.y }; };
-  const moveDrag = (event: ReactPointerEvent<HTMLButtonElement>) => { if (!dragRef.current) return; dispatch({ type: 'SET_TOOLBAR_POSITION', position: { x: Math.max(8, Math.min(window.innerWidth - 70, event.clientX - dragRef.current.dx)), y: Math.max(76, Math.min(window.innerHeight - 70, event.clientY - dragRef.current.dy)) } }); };
+  const moveDrag = (event: ReactPointerEvent<HTMLButtonElement>) => { if (!dragRef.current) return; dispatch({ type: 'SET_TOOLBAR_POSITION', position: clampPosition(event.clientX - dragRef.current.dx, event.clientY - dragRef.current.dy) }); };
 
   const renderTool = (tool: Tool) => {
     if (state.hiddenTools.includes(tool)) return null;
     const meta = TOOL_META[tool];
-    return <button key={tool} className={`toolbar-btn ${state.activeTool === tool ? 'active' : ''}`} onClick={() => chooseTool(tool)} onDoubleClick={() => { chooseTool(tool); dispatch({ type: 'SET_TOOL_LOCKED', locked: true }); }} aria-label={`${meta.label} (${meta.shortcut})`} aria-pressed={state.activeTool === tool} title={`${meta.label} (${meta.shortcut})`}>{meta.icon}<span className="toolbar-tooltip">{meta.label}<span className="shortcut">{meta.shortcut}</span></span></button>;
+    return <button key={tool} className={`toolbar-btn ${state.activeTool === tool ? 'active' : ''}`} onClick={() => chooseTool(tool)} aria-label={`${meta.label} (${meta.shortcut})`} aria-pressed={state.activeTool === tool} title={`${meta.label} (${meta.shortcut})`}>{meta.icon}<span className="toolbar-tooltip">{meta.label}<span className="shortcut">{meta.shortcut}</span></span></button>;
   };
 
-  return <div className={`toolbar glass-panel toolbar-${state.toolbarOrientation}`} style={{ left: state.toolbarPosition.x, top: state.toolbarPosition.y }} role="toolbar" aria-label="Drawing tools">
+  return <div ref={toolbarRef} className={`toolbar glass-panel toolbar-${state.toolbarOrientation}`} style={{ left: state.toolbarPosition.x, top: state.toolbarPosition.y }} role="toolbar" aria-label="Drawing tools">
     <button className="toolbar-drag-handle" aria-label="Move toolbar" title="Move toolbar" onPointerDown={startDrag} onPointerMove={moveDrag} onPointerUp={() => { dragRef.current = null; }}><span>⠿</span></button>
-    <button className={`toolbar-btn tool-lock-btn ${state.toolLocked ? 'active' : ''}`} onClick={() => dispatch({ type: 'SET_TOOL_LOCKED', locked: !state.toolLocked })} aria-pressed={state.toolLocked} aria-label={`Keep tools active: ${state.toolLocked ? 'on' : 'off'}`} title="Keep tools active"><Icon><path d="M12 17v5M5 10h14m-12 0 1-7h8l1 7 2 3H5z" /></Icon></button>
-    <div className="toolbar-separator" />
     {PRIMARY.slice(0, 3).map(renderTool)}
-    <div className="shape-tool-wrap" onMouseEnter={() => setShowShapes(true)} onMouseLeave={() => setShowShapes(false)}><button className={`toolbar-btn ${shapeActive ? 'active' : ''}`} onClick={() => setShowShapes((open) => !open)} aria-expanded={showShapes} aria-label="Shapes" title="Shapes">{shapeActive ? TOOL_META[state.activeTool].icon : <Icon><rect x="3" y="4" width="8" height="8" rx="1"/><circle cx="17" cy="8" r="4"/><path d="m7 15 4 6H3zM14 20l7-7"/></Icon>}<span className="shape-caret">›</span></button>{showShapes && <div className="shape-popover glass-panel" role="menu" aria-label="Shapes">{SHAPES.filter((tool) => !state.hiddenTools.includes(tool)).map((tool) => <button key={tool} onClick={() => chooseTool(tool)} onDoubleClick={() => { chooseTool(tool); dispatch({ type: 'SET_TOOL_LOCKED', locked: true }); }} className={state.activeTool === tool ? 'active' : ''} title={`${TOOL_META[tool].label} — double-click to pin`}>{TOOL_META[tool].icon}<span>{TOOL_META[tool].label}</span></button>)}</div>}</div>
+    <div className="shape-tool-wrap" onMouseEnter={() => setShowShapes(true)} onMouseLeave={() => setShowShapes(false)}><button className={`toolbar-btn ${shapeActive ? 'active' : ''}`} onClick={() => setShowShapes((open) => !open)} aria-expanded={showShapes} aria-label="Shapes" title="Shapes">{shapeActive ? TOOL_META[state.activeTool].icon : <Icon><rect x="3" y="4" width="8" height="8" rx="1"/><circle cx="17" cy="8" r="4"/><path d="m7 15 4 6H3zM14 20l7-7"/></Icon>}<span className="shape-caret">›</span></button>{showShapes && <div className="shape-popover glass-panel" role="menu" aria-label="Shapes">{SHAPES.filter((tool) => !state.hiddenTools.includes(tool)).map((tool) => <button key={tool} onClick={() => chooseTool(tool)} className={state.activeTool === tool ? 'active' : ''} title={TOOL_META[tool].label}>{TOOL_META[tool].icon}<span>{TOOL_META[tool].label}</span></button>)}</div>}</div>
     {PRIMARY.slice(3).map(renderTool)}
+    <div className="toolbar-separator toolbar-action-separator" />
+    <button className="toolbar-btn toolbar-action" onClick={() => dispatch({ type:'UNDO' })} disabled={!state.history.past.length} aria-label="Undo"><Icon><path d="M3 7v6h6"/><path d="M5.5 17a9 9 0 1 0 .5-10L3 10"/></Icon></button>
+    <button className="toolbar-btn toolbar-action" onClick={() => dispatch({ type:'REDO' })} disabled={!state.history.future.length} aria-label="Redo"><Icon><path d="M21 7v6h-6"/><path d="M18.5 17a9 9 0 1 1-.5-10l3 3"/></Icon></button>
+    <button className="toolbar-btn toolbar-action" onClick={() => exportPNG(state.elements, state.theme)} aria-label="Download PNG"><Icon><path d="M12 3v12m0 0 5-5m-5 5-5-5M4 19h16"/></Icon></button>
   </div>;
 }

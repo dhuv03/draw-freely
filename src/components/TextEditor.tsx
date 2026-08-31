@@ -138,7 +138,7 @@ export function TextEditor({ viewport, onSubmit }: TextEditorProps) {
     if (editingElement && editingElement.width > 30) {
       widthStyle.width = editingElement.width * viewport.zoom;
     } else if (!editingElement) {
-      widthStyle.width = Math.min(420, window.innerWidth * 0.42);
+      widthStyle.width = Math.min(420, Math.max(180, window.innerWidth - screenX - 24));
     }
 
     return {
@@ -191,7 +191,6 @@ export function TextEditor({ viewport, onSubmit }: TextEditorProps) {
           id: editingElement.id,
           updates,
         });
-        if (!state.toolLocked) dispatch({ type: 'SET_TOOL', tool: 'select' });
         dispatch({ type: 'SET_SELECTION', ids: [editingElement.id] });
       } else {
         try {
@@ -221,7 +220,6 @@ export function TextEditor({ viewport, onSubmit }: TextEditorProps) {
             seed: Math.floor(Math.random() * 100000),
           } as ExcalidrawElement;
           onSubmit(newElement);
-          if (!state.toolLocked) dispatch({ type: 'SET_TOOL', tool: 'select' });
           dispatch({ type: 'SET_SELECTION', ids: [newElement.id] });
         } catch {
           // ignore invalid position id
@@ -230,7 +228,7 @@ export function TextEditor({ viewport, onSubmit }: TextEditorProps) {
 
       dispatch({ type: 'SET_EDITING_TEXT', id: null });
     },
-    [editingId, editingElement, dispatch, onSubmit, state.defaultElementProps, state.toolLocked],
+    [editingId, editingElement, dispatch, onSubmit, state.defaultElementProps],
   );
 
   // Auto-focus when editing starts

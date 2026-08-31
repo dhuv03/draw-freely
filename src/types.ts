@@ -118,7 +118,6 @@ export interface AppState {
   theme: 'light' | 'dark';
   appearanceMode: AppearanceMode;
   themeId: ThemeId;
-  toolLocked: boolean;
   canvasPattern: CanvasPattern;
   hiddenTools: Tool[];
   toolbarOrientation: ToolbarOrientation;
@@ -156,7 +155,6 @@ export type AppAction =
   | { type: 'SET_THEME'; theme: 'light' | 'dark' }
   | { type: 'SET_APPEARANCE_MODE'; mode: AppearanceMode; resolvedTheme: 'light' | 'dark'; canvasBackground: string }
   | { type: 'SET_THEME_ID'; themeId: ThemeId; appearance: 'light' | 'dark'; canvasBackground: string }
-  | { type: 'SET_TOOL_LOCKED'; locked: boolean }
   | { type: 'SET_CANVAS_PATTERN'; pattern: CanvasPattern }
   | { type: 'SET_HIDDEN_TOOLS'; tools: Tool[] }
   | { type: 'SET_TOOLBAR_ORIENTATION'; orientation: ToolbarOrientation }
