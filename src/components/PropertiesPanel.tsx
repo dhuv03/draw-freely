@@ -2,14 +2,17 @@
 // DrawFreely — Properties Panel (Right Side)
 // ──────────────────────────────────────────────
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useAppContext } from '../AppContext';
 import { STROKE_COLORS, FILL_COLORS, STROKE_WIDTHS } from '../constants';
 import type { StrokeStyle, FillStyle, ExcalidrawElement, TextAlign, VerticalAlign, ElementDefaults, ElementType } from '../types';
+import { CanvasColorPicker } from './CanvasColorPicker';
 
 export function PropertiesPanel() {
   const { state, dispatch } = useAppContext();
   const [mobileCollapsed, setMobileCollapsed] = useState(false);
+  const [, setViewportRevision] = useState(0);
+  useEffect(() => { const resize = () => setViewportRevision((value) => value + 1); window.addEventListener('resize', resize); return () => window.removeEventListener('resize', resize); }, []);
   const { elements, selectedElementIds } = state;
 
   const selectedElements = elements.filter((el) =>
@@ -31,6 +34,9 @@ export function PropertiesPanel() {
   
   // Current active element type (for conditional sections):
   const currentType = hasSelection ? selectedElements[0].type : state.activeTool;
+  const panelDirection = state.toolbarOrientation === 'vertical'
+    ? (state.toolbarPosition.x > window.innerWidth / 2 ? 'left' : 'right')
+    : (state.toolbarPosition.y > window.innerHeight / 2 ? 'above' : 'below');
 
   const updateAll = (updates: Partial<ExcalidrawElement>) => {
     if (hasSelection) {
@@ -91,7 +97,7 @@ export function PropertiesPanel() {
   };
 
   return (
-    <div className={`properties-panel glass-panel ${mobileCollapsed ? 'mobile-collapsed' : ''}`} role="complementary" aria-label="Element properties">
+    <div className={`properties-panel properties-${panelDirection} glass-panel ${mobileCollapsed ? 'mobile-collapsed' : ''}`} role="complementary" aria-label="Element properties">
       <button
         type="button"
         className="properties-collapse-btn"
@@ -178,17 +184,7 @@ export function PropertiesPanel() {
       {currentType !== 'eraser' && (
         <div className="prop-section">
           <span className="prop-label">Stroke</span>
-          <div className="color-swatches">
-            {STROKE_COLORS.map((color) => (
-              <button
-                key={color}
-                className={`color-swatch ${currentProperties.strokeColor === color ? 'active' : ''}`}
-                style={{ background: color }}
-                onClick={() => updateAll({ strokeColor: color })}
-                title={color}
-              />
-            ))}
-          </div>
+          <CanvasColorPicker value={currentProperties.strokeColor} swatches={[...STROKE_COLORS]} label="stroke colour" onChange={(color) => updateAll({ strokeColor:color })}/>
         </div>
       )}
 
@@ -196,17 +192,7 @@ export function PropertiesPanel() {
       {!['line', 'arrow', 'curvedarrow', 'elbowarrow', 'freedraw', 'text', 'eraser'].includes(currentType) && (
         <div className="prop-section">
           <span className="prop-label">Fill</span>
-          <div className="color-swatches">
-            {FILL_COLORS.map((color) => (
-              <button
-                key={color}
-                className={`color-swatch ${color === 'transparent' ? 'transparent-swatch' : ''} ${currentProperties.fillColor === color ? 'active' : ''}`}
-                style={color !== 'transparent' ? { background: color } : undefined}
-                onClick={() => updateAll({ fillColor: color })}
-                title={color === 'transparent' ? 'None' : color}
-              />
-            ))}
-          </div>
+          <div className="fill-color-row"><button className={`color-swatch transparent-swatch ${currentProperties.fillColor === 'transparent' ? 'active' : ''}`} onClick={() => updateAll({ fillColor:'transparent' })} aria-label="No fill"/><CanvasColorPicker value={currentProperties.fillColor === 'transparent' ? '#ffffff' : currentProperties.fillColor} swatches={FILL_COLORS.filter((color) => color !== 'transparent')} label="fill colour" onChange={(color) => updateAll({ fillColor:color })}/></div>
         </div>
       )}
 

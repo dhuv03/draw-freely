@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { useAppContext } from '../AppContext';
 import type { Tool } from '../types';
 import { exportPNG } from '../storage/persistence';
@@ -27,7 +27,8 @@ const SHAPES: Tool[] = ['rectangle', 'ellipse', 'diamond', 'triangle', 'line', '
 export function Toolbar() {
   const { state, dispatch } = useAppContext();
   const [showShapes, setShowShapes] = useState(false);
-  const dragRef = useRef<{ dx: number; dy: number } | null>(null);
+  const [shapeDirection, setShapeDirection] = useState<'above'|'below'|'left'|'right'>('below');
+  const dragRef = useRef<{ dx: number; dy: number; pointerId:number } | null>(null);
   const toolbarRef = useRef<HTMLDivElement>(null);
   const shapeActive = SHAPES.includes(state.activeTool);
 
@@ -56,8 +57,38 @@ export function Toolbar() {
     window.addEventListener('resize', recover);
     return () => window.removeEventListener('resize', recover);
   }, [clampPosition, dispatch, state.toolbarPosition.x, state.toolbarPosition.y]);
-  const startDrag = (event: ReactPointerEvent<HTMLButtonElement>) => { event.currentTarget.setPointerCapture(event.pointerId); dragRef.current = { dx: event.clientX - state.toolbarPosition.x, dy: event.clientY - state.toolbarPosition.y }; };
-  const moveDrag = (event: ReactPointerEvent<HTMLButtonElement>) => { if (!dragRef.current) return; dispatch({ type: 'SET_TOOLBAR_POSITION', position: clampPosition(event.clientX - dragRef.current.dx, event.clientY - dragRef.current.dy) }); };
+  const syncToolbarRect = useCallback(() => {
+    const rect = toolbarRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const root = document.documentElement.style;
+    root.setProperty('--toolbar-left', `${rect.left}px`); root.setProperty('--toolbar-right', `${rect.right}px`);
+    root.setProperty('--toolbar-top', `${rect.top}px`); root.setProperty('--toolbar-bottom', `${rect.bottom}px`);
+  }, []);
+  useLayoutEffect(() => {
+    syncToolbarRect();
+    window.addEventListener('resize', syncToolbarRect);
+    return () => window.removeEventListener('resize', syncToolbarRect);
+  }, [state.toolbarPosition, state.toolbarOrientation, syncToolbarRect]);
+  const stopDrag = useCallback((event?: PointerEvent | ReactPointerEvent) => {
+    if (!dragRef.current || (event && event.pointerId !== dragRef.current.pointerId)) return;
+    dragRef.current = null;
+  }, []);
+  useEffect(() => {
+    const stop = (event: PointerEvent) => stopDrag(event);
+    const blur = () => stopDrag();
+    window.addEventListener('pointerup', stop, true); window.addEventListener('pointercancel', stop, true); window.addEventListener('blur', blur);
+    return () => { window.removeEventListener('pointerup', stop, true); window.removeEventListener('pointercancel', stop, true); window.removeEventListener('blur', blur); };
+  }, [stopDrag]);
+  const startDrag = (event: ReactPointerEvent<HTMLButtonElement>) => { if (window.innerWidth <= 900 || event.button !== 0) return; event.preventDefault(); event.currentTarget.setPointerCapture(event.pointerId); dragRef.current = { dx: event.clientX - state.toolbarPosition.x, dy: event.clientY - state.toolbarPosition.y, pointerId:event.pointerId }; };
+  const moveDrag = (event: ReactPointerEvent<HTMLButtonElement>) => { if (!dragRef.current || dragRef.current.pointerId !== event.pointerId || !(event.buttons & 1)) { stopDrag(event); return; } dispatch({ type: 'SET_TOOLBAR_POSITION', position: clampPosition(event.clientX - dragRef.current.dx, event.clientY - dragRef.current.dy) }); };
+  const toggleShapes = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    if (!showShapes) {
+      const rect = event.currentTarget.getBoundingClientRect();
+      if (state.toolbarOrientation === 'vertical') setShapeDirection(rect.right + 190 <= window.innerWidth ? 'right' : 'left');
+      else setShapeDirection(rect.top >= 190 ? 'above' : 'below');
+    }
+    setShowShapes((open) => !open);
+  };
 
   const renderTool = (tool: Tool) => {
     if (state.hiddenTools.includes(tool)) return null;
@@ -66,9 +97,9 @@ export function Toolbar() {
   };
 
   return <div ref={toolbarRef} className={`toolbar glass-panel toolbar-${state.toolbarOrientation}`} style={{ left: state.toolbarPosition.x, top: state.toolbarPosition.y }} role="toolbar" aria-label="Drawing tools">
-    <button className="toolbar-drag-handle" aria-label="Move toolbar" title="Move toolbar" onPointerDown={startDrag} onPointerMove={moveDrag} onPointerUp={() => { dragRef.current = null; }}><span>⠿</span></button>
+    <button className="toolbar-drag-handle" aria-label="Move toolbar" title="Move toolbar" onPointerDown={startDrag} onPointerMove={moveDrag} onPointerUp={stopDrag} onPointerCancel={stopDrag} onLostPointerCapture={stopDrag}><span>⠿</span></button>
     {PRIMARY.slice(0, 3).map(renderTool)}
-    <div className="shape-tool-wrap" onMouseEnter={() => setShowShapes(true)} onMouseLeave={() => setShowShapes(false)}><button className={`toolbar-btn ${shapeActive ? 'active' : ''}`} onClick={() => setShowShapes((open) => !open)} aria-expanded={showShapes} aria-label="Shapes" title="Shapes">{shapeActive ? TOOL_META[state.activeTool].icon : <Icon><rect x="3" y="4" width="8" height="8" rx="1"/><circle cx="17" cy="8" r="4"/><path d="m7 15 4 6H3zM14 20l7-7"/></Icon>}<span className="shape-caret">›</span></button>{showShapes && <div className="shape-popover glass-panel" role="menu" aria-label="Shapes">{SHAPES.filter((tool) => !state.hiddenTools.includes(tool)).map((tool) => <button key={tool} onClick={() => chooseTool(tool)} className={state.activeTool === tool ? 'active' : ''} title={TOOL_META[tool].label}>{TOOL_META[tool].icon}<span>{TOOL_META[tool].label}</span></button>)}</div>}</div>
+    <div className="shape-tool-wrap"><button className={`toolbar-btn ${shapeActive ? 'active' : ''}`} onPointerUp={toggleShapes} aria-expanded={showShapes} aria-label="Shapes" title="Shapes">{shapeActive ? TOOL_META[state.activeTool].icon : <Icon><rect x="3" y="4" width="8" height="8" rx="1"/><circle cx="17" cy="8" r="4"/><path d="m7 15 4 6H3zM14 20l7-7"/></Icon>}<span className="shape-caret">›</span></button>{showShapes && <div className={`shape-popover shape-${shapeDirection} glass-panel`} role="menu" aria-label="Shapes">{SHAPES.filter((tool) => !state.hiddenTools.includes(tool)).map((tool) => <button key={tool} onClick={() => chooseTool(tool)} className={state.activeTool === tool ? 'active' : ''} title={TOOL_META[tool].label}>{TOOL_META[tool].icon}<span>{TOOL_META[tool].label}</span></button>)}</div>}</div>
     {PRIMARY.slice(3).map(renderTool)}
     <div className="toolbar-separator toolbar-action-separator" />
     <button className="toolbar-btn toolbar-action" onClick={() => dispatch({ type:'UNDO' })} disabled={!state.history.past.length} aria-label="Undo"><Icon><path d="M3 7v6h6"/><path d="M5.5 17a9 9 0 1 0 .5-10L3 10"/></Icon></button>
