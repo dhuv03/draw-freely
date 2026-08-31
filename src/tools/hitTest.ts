@@ -309,6 +309,8 @@ export function hitTestResizeHandles(
   point: Point,
   zoom: number,
   isText?: boolean,
+  angle = 0,
+  center?: Point,
 ): ResizeHandle | null {
   const hs = HANDLE_SIZE / zoom; // Handle size in canvas coordinates
 
@@ -323,8 +325,12 @@ export function hitTestResizeHandles(
     { handle: 'w' as ResizeHandle, x: bounds.x, y: bounds.y + bounds.height / 2 },
   ];
 
+  const pivot = center || { x:bounds.x + bounds.width / 2, y:bounds.y + bounds.height / 2 };
   for (const { handle, x, y } of handles) {
-    if (Math.abs(point.x - x) <= hs && Math.abs(point.y - y) <= hs) {
+    const dx = x - pivot.x, dy = y - pivot.y;
+    const hx = pivot.x + dx * Math.cos(angle) - dy * Math.sin(angle);
+    const hy = pivot.y + dx * Math.sin(angle) + dy * Math.cos(angle);
+    if (Math.abs(point.x - hx) <= hs && Math.abs(point.y - hy) <= hs) {
       return handle;
     }
   }

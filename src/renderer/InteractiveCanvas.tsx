@@ -5,7 +5,7 @@
 
 import { useRef, useEffect, useLayoutEffect, useCallback, useImperativeHandle, forwardRef } from 'react';
 import { useAppContext } from '../AppContext';
-import { getElementBounds } from './renderElement';
+import { getElementBounds, getElementUnrotatedBounds, transformElementPoint } from './renderElement';
 import { HANDLE_SIZE } from '../constants';
 
 export interface InteractiveCanvasHandle {
@@ -58,11 +58,11 @@ export const InteractiveCanvas = forwardRef<InteractiveCanvasHandle, object>(
             const hasTwoPointsOrFewer = (el.type === 'line' || el.type === 'arrow') && el.points && el.points.length <= 2;
             if (hasTwoPointsOrFewer) continue;
 
-            const bounds = getElementBounds(el);
+            const bounds = getElementUnrotatedBounds(el);
             ctx.strokeStyle = selColor;
             ctx.lineWidth = 2 / viewport.zoom;
             ctx.setLineDash(el.type === 'text' ? [5 / viewport.zoom, 4 / viewport.zoom] : []);
-            ctx.strokeRect(bounds.x, bounds.y, bounds.width, bounds.height);
+            drawRotatedBounds(ctx, bounds, el);
             ctx.setLineDash([]);
           }
 
@@ -73,15 +73,16 @@ export const InteractiveCanvas = forwardRef<InteractiveCanvasHandle, object>(
             const hasTwoPointsOrFewer = el.points.length <= 2;
 
             if (!hasTwoPointsOrFewer) {
-              const bounds = getElementBounds(el);
-              drawResizeHandles(ctx, bounds, handleSize, selColor, theme, false);
+              const bounds = getElementUnrotatedBounds(el);
+              drawResizeHandles(ctx, bounds, handleSize, selColor, theme, false, el);
             }
 
             // Draw vertex handles
             for (let i = 0; i < el.points.length; i++) {
               const pt = el.points[i];
-              const px = el.x + pt[0];
-              const py = el.y + pt[1];
+              const vertex = transformElementPoint(el, { x:el.x + pt[0], y:el.y + pt[1] });
+              const px = vertex.x;
+              const py = vertex.y;
 
               ctx.fillStyle = '#ffffff';
               ctx.strokeStyle = selColor;
@@ -96,8 +97,9 @@ export const InteractiveCanvas = forwardRef<InteractiveCanvasHandle, object>(
             for (let i = 0; i < el.points.length - 1; i++) {
               const p1 = el.points[i];
               const p2 = el.points[i + 1];
-              const mx = el.x + (p1[0] + p2[0]) / 2;
-              const my = el.y + (p1[1] + p2[1]) / 2;
+              const midpoint = transformElementPoint(el, { x:el.x + (p1[0] + p2[0]) / 2, y:el.y + (p1[1] + p2[1]) / 2 });
+              const mx = midpoint.x;
+              const my = midpoint.y;
 
               ctx.fillStyle = 'rgba(139, 92, 246, 0.6)'; // Purple semi-transparent
               ctx.strokeStyle = '#8B5CF6';
@@ -108,12 +110,13 @@ export const InteractiveCanvas = forwardRef<InteractiveCanvasHandle, object>(
               ctx.stroke();
             }
           } else {
-            const bounds = getElementBounds(el);
+            const bounds = getElementUnrotatedBounds(el);
             if (el.type !== 'text') {
-              drawResizeHandles(ctx, bounds, handleSize, selColor, theme, false);
-              const rx = bounds.x + bounds.width / 2;
-              const ry = bounds.y - 24 / viewport.zoom;
-              ctx.beginPath(); ctx.moveTo(rx, bounds.y); ctx.lineTo(rx, ry); ctx.stroke();
+              drawResizeHandles(ctx, bounds, handleSize, selColor, theme, false, el);
+              const top = transformElementPoint(el, { x:bounds.x + bounds.width / 2, y:bounds.y });
+              const handle = transformElementPoint(el, { x:bounds.x + bounds.width / 2, y:bounds.y - 24 / viewport.zoom });
+              const rx = handle.x, ry = handle.y;
+              ctx.beginPath(); ctx.moveTo(top.x, top.y); ctx.lineTo(rx, ry); ctx.stroke();
               ctx.fillStyle = theme === 'dark' ? '#1a1a2e' : '#ffffff';
               ctx.beginPath(); ctx.arc(rx, ry, 6 / viewport.zoom, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
             }
@@ -218,6 +221,7 @@ function drawResizeHandles(
   color: string,
   theme: string,
   isText: boolean,
+  element?: Parameters<typeof transformElementPoint>[0],
 ) {
   const { x, y, width, height } = bounds;
   const handlePositions = isText
@@ -243,10 +247,25 @@ function drawResizeHandles(
   const fillColor = theme === 'dark' ? '#1a1a2e' : '#ffffff';
 
   for (const pos of handlePositions) {
+    const transformed = element ? transformElementPoint(element, pos) : pos;
     ctx.fillStyle = fillColor;
     ctx.strokeStyle = color;
     ctx.lineWidth = 1.5 / (ctx.getTransform().a || 1); // account for current scale
-    ctx.fillRect(pos.x - size / 2, pos.y - size / 2, size, size);
-    ctx.strokeRect(pos.x - size / 2, pos.y - size / 2, size, size);
+    ctx.fillRect(transformed.x - size / 2, transformed.y - size / 2, size, size);
+    ctx.strokeRect(transformed.x - size / 2, transformed.y - size / 2, size, size);
   }
+}
+
+function drawRotatedBounds(
+  ctx: CanvasRenderingContext2D,
+  bounds: { x:number; y:number; width:number; height:number },
+  element: Parameters<typeof transformElementPoint>[0],
+) {
+  const corners = [
+    { x:bounds.x, y:bounds.y }, { x:bounds.x + bounds.width, y:bounds.y },
+    { x:bounds.x + bounds.width, y:bounds.y + bounds.height }, { x:bounds.x, y:bounds.y + bounds.height },
+  ].map((point) => transformElementPoint(element, point));
+  ctx.beginPath(); ctx.moveTo(corners[0].x, corners[0].y);
+  for (let i = 1; i < corners.length; i++) ctx.lineTo(corners[i].x, corners[i].y);
+  ctx.closePath(); ctx.stroke();
 }

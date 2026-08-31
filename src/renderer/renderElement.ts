@@ -486,6 +486,21 @@ export function getElementBounds(el: ExcalidrawElement): Bounds {
   return { x: x + width / 2 - rotatedWidth / 2, y: y + height / 2 - rotatedHeight / 2, width: rotatedWidth, height: rotatedHeight };
 }
 
+/** Bounds before rotation; selection UI and resize math use this local frame. */
+export function getElementUnrotatedBounds(el: ExcalidrawElement): Bounds {
+  return getElementBounds(el.angle ? { ...el, angle: 0 } : el);
+}
+
+export function transformElementPoint(el: ExcalidrawElement, point: Point, inverse = false): Point {
+  if (!el.angle) return point;
+  const centerX = el.x + el.width / 2;
+  const centerY = el.y + el.height / 2;
+  const angle = inverse ? -el.angle : el.angle;
+  const cos = Math.cos(angle), sin = Math.sin(angle);
+  const dx = point.x - centerX, dy = point.y - centerY;
+  return { x:centerX + dx * cos - dy * sin, y:centerY + dx * sin + dy * cos };
+}
+
 // ── Text Measurement ─────────────────────────
 export function measureTextElement(el: ExcalidrawElement): Bounds {
   const text = el.text || '';

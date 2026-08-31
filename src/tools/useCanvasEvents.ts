@@ -17,7 +17,7 @@ import {
   getElementsInRect,
   type ResizeHandle,
 } from './hitTest';
-import { getElementBounds } from '../renderer/renderElement';
+import { getElementBounds, getElementUnrotatedBounds, transformElementPoint } from '../renderer/renderElement';
 import { nanoid } from 'nanoid';
 import type { StaticCanvasHandle } from '../renderer/StaticCanvas';
 import type { InteractiveCanvasHandle } from '../renderer/InteractiveCanvas';
@@ -216,8 +216,9 @@ export function useCanvasEvents(
             // 1. Check vertex handles
             for (let i = 0; i < selEl.points.length; i++) {
               const pt = selEl.points[i];
-              const px = selEl.x + pt[0];
-              const py = selEl.y + pt[1];
+              const vertex = transformElementPoint(selEl, { x:selEl.x + pt[0], y:selEl.y + pt[1] });
+              const px = vertex.x;
+              const py = vertex.y;
               if (Math.abs(cp.x - px) <= hs && Math.abs(cp.y - py) <= hs) {
                 dispatch({ type: 'SNAPSHOT' });
                 p.action = 'vertex_dragging' as any;
@@ -231,8 +232,9 @@ export function useCanvasEvents(
             for (let i = 0; i < selEl.points.length - 1; i++) {
               const p1 = selEl.points[i];
               const p2 = selEl.points[i + 1];
-              const mx = selEl.x + (p1[0] + p2[0]) / 2;
-              const my = selEl.y + (p1[1] + p2[1]) / 2;
+              const midpoint = transformElementPoint(selEl, { x:selEl.x + (p1[0] + p2[0]) / 2, y:selEl.y + (p1[1] + p2[1]) / 2 });
+              const mx = midpoint.x;
+              const my = midpoint.y;
               if (Math.abs(cp.x - mx) <= hs && Math.abs(cp.y - my) <= hs) {
                 dispatch({ type: 'SNAPSHOT' });
                 
@@ -260,12 +262,13 @@ export function useCanvasEvents(
         if (s.selectedElementIds.length === 1) {
           const selEl = s.elements.find((el) => el.id === s.selectedElementIds[0]);
           if (selEl) {
-            const bounds = getElementBounds(selEl);
-            const rotatePoint = { x: bounds.x + bounds.width / 2, y: bounds.y - 24 / s.viewport.zoom };
+            const bounds = getElementUnrotatedBounds(selEl);
+            const center = { x:selEl.x + selEl.width / 2, y:selEl.y + selEl.height / 2 };
+            const rotatePoint = transformElementPoint(selEl, { x: bounds.x + bounds.width / 2, y: bounds.y - 24 / s.viewport.zoom });
             if (Math.hypot(cp.x - rotatePoint.x, cp.y - rotatePoint.y) <= 10 / s.viewport.zoom) {
-              dispatch({ type: 'SNAPSHOT' }); p.action = 'rotating'; (p as PointerState & { rotationCenter?: Point }).rotationCenter = { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 }; return;
+              dispatch({ type: 'SNAPSHOT' }); p.action = 'rotating'; (p as PointerState & { rotationCenter?: Point }).rotationCenter = center; return;
             }
-            const handle = hitTestResizeHandles(bounds, cp, s.viewport.zoom, selEl.type === 'text');
+            const handle = hitTestResizeHandles(bounds, cp, s.viewport.zoom, selEl.type === 'text', selEl.angle || 0, center);
             if (handle) {
               dispatch({ type: 'SNAPSHOT' });
               p.action = 'resizing';
@@ -523,7 +526,8 @@ export function useCanvasEvents(
         const el = s.elements.find((e) => e.id === lineId);
         if (el && el.points) {
           const newPoints = [...el.points];
-          newPoints[vertexIdx] = [cp.x - el.x, cp.y - el.y, 0];
+          const localPoint = transformElementPoint(el, cp, true);
+          newPoints[vertexIdx] = [localPoint.x - el.x, localPoint.y - el.y, 0];
 
           dispatch({
             type: 'UPDATE_ELEMENT',
@@ -651,9 +655,13 @@ export function useCanvasEvents(
         } else {
           const startPoints = (p as any).startPoints as [number, number][] | undefined;
           const startBounds = (p as any).startBounds as { x:number; y:number; width:number; height:number } | undefined;
+          const localPoint = transformElementPoint(el, cp, true);
+          const localStart = transformElementPoint(el, p.startCanvas, true);
+          const cos = Math.cos(-(el.angle || 0)), sin = Math.sin(-(el.angle || 0));
+          const localDx = dx * cos - dy * sin, localDy = dx * sin + dy * cos;
           if ((el.type === 'line' || el.type === 'arrow') && startPoints && startBounds) {
-            resizeLinearElement(el, p.resizeHandle, cp, p.startCanvas, startPoints, startBounds, dispatch);
-          } else applyResize(el, p.resizeHandle, dx, dy, dispatch);
+            resizeLinearElement(el, p.resizeHandle, localPoint, localStart, startPoints, startBounds, dispatch);
+          } else applyResize(el, p.resizeHandle, localDx, localDy, dispatch);
         }
         forceStaticRender();
         forceInteractiveRender();
@@ -1061,8 +1069,9 @@ function updateCursor(
           if ((selEl.type === 'line' || selEl.type === 'arrow') && selEl.points && selEl.points.length > 0) {
             const hs = 8 / state.viewport.zoom;
             for (const pt of selEl.points) {
-              const px = selEl.x + pt[0];
-              const py = selEl.y + pt[1];
+              const vertex = transformElementPoint(selEl, { x:selEl.x + pt[0], y:selEl.y + pt[1] });
+              const px = vertex.x;
+              const py = vertex.y;
               if (Math.abs(cp.x - px) <= hs && Math.abs(cp.y - py) <= hs) {
                 canvas.style.cursor = 'pointer';
                 return;
@@ -1071,8 +1080,9 @@ function updateCursor(
             for (let i = 0; i < selEl.points.length - 1; i++) {
               const p1 = selEl.points[i];
               const p2 = selEl.points[i + 1];
-              const mx = selEl.x + (p1[0] + p2[0]) / 2;
-              const my = selEl.y + (p1[1] + p2[1]) / 2;
+              const midpoint = transformElementPoint(selEl, { x:selEl.x + (p1[0] + p2[0]) / 2, y:selEl.y + (p1[1] + p2[1]) / 2 });
+              const mx = midpoint.x;
+              const my = midpoint.y;
               if (Math.abs(cp.x - mx) <= hs && Math.abs(cp.y - my) <= hs) {
                 canvas.style.cursor = 'pointer';
                 return;
@@ -1080,13 +1090,14 @@ function updateCursor(
             }
           }
 
-          const bounds = getElementBounds(selEl);
-          const rotatePoint = { x: bounds.x + bounds.width / 2, y: bounds.y - 24 / state.viewport.zoom };
+          const bounds = getElementUnrotatedBounds(selEl);
+          const center = { x:selEl.x + selEl.width / 2, y:selEl.y + selEl.height / 2 };
+          const rotatePoint = transformElementPoint(selEl, { x: bounds.x + bounds.width / 2, y: bounds.y - 24 / state.viewport.zoom });
           if (Math.hypot(cp.x - rotatePoint.x, cp.y - rotatePoint.y) <= 10 / state.viewport.zoom) {
             canvas.style.cursor = 'grab';
             return;
           }
-          const handle = hitTestResizeHandles(bounds, cp, state.viewport.zoom, selEl.type === 'text');
+          const handle = hitTestResizeHandles(bounds, cp, state.viewport.zoom, selEl.type === 'text', selEl.angle || 0, center);
           if (handle) {
             const cursorMap: Record<string, string> = {
               nw: 'nwse-resize',
