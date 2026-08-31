@@ -155,7 +155,7 @@ export function PropertiesPanel() {
             ].map((opt) => {
               const isActive = hasSelection
                 ? selectedElements[0].type === opt.typeVal
-                : state.defaultElementProps.arrowType === opt.arrowTypeVal;
+                : currentType === opt.typeVal || (currentType === 'arrow' && state.defaultElementProps.arrowType === opt.arrowTypeVal);
               return (
                 <div className="tooltip-container" key={opt.label}>
                   <button
@@ -167,6 +167,7 @@ export function PropertiesPanel() {
                         updateAll({ type: opt.typeVal });
                       } else {
                         updateAll({ arrowType: opt.arrowTypeVal });
+                        dispatch({ type:'SET_TOOL', tool:opt.typeVal });
                       }
                     }}
                   >

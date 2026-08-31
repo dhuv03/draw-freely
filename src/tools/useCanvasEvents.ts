@@ -332,7 +332,7 @@ export function useCanvasEvents(
       }
 
       // ?? LINE / ARROW ????????????????????
-      if (tool === 'line' || tool === 'arrow') {
+      if (tool === 'line' || tool === 'arrow' || tool === 'curvedarrow' || tool === 'elbowarrow') {
         dispatch({ type: 'SNAPSHOT' });
         let typeToCreate: ExcalidrawElement['type'] = tool as ExcalidrawElement['type'];
         if (tool === 'arrow') {
