@@ -3,7 +3,7 @@
 // ──────────────────────────────────────────────
 
 import { openDB, type IDBPDatabase } from 'idb';
-import type { ExcalidrawElement, Viewport, ThemeId, AppearanceMode, CanvasPattern, Tool, ToolbarOrientation, DrawingLayer } from '../types';
+import type { ExcalidrawElement, Viewport, ThemeId, AppearanceMode, CanvasPattern, Tool, ToolbarOrientation, DrawingLayer, DrawingPage } from '../types';
 import { renderElement, getElementBounds, getArrowGeometry } from '../renderer/renderElement';
 import rough from 'roughjs';
 
@@ -30,6 +30,8 @@ function getDB() {
 
 export async function saveToDB(data: {
   elements?: ExcalidrawElement[];
+  pages?: DrawingPage[];
+  activePageId?: string;
   layers?: DrawingLayer[];
   activeLayerId?: string;
   viewport?: Viewport;
@@ -48,6 +50,8 @@ export async function saveToDB(data: {
     const tx = db.transaction(STORE_NAME, 'readwrite');
     const store = tx.objectStore(STORE_NAME);
     if (data.elements) await store.put(data.elements, 'elements');
+    if (data.pages) await store.put(data.pages, 'pages');
+    if (data.activePageId) await store.put(data.activePageId, 'activePageId');
     if (data.layers) await store.put(data.layers, 'layers');
     if (data.activeLayerId) await store.put(data.activeLayerId, 'activeLayerId');
     if (data.viewport) await store.put(data.viewport, 'viewport');
@@ -68,6 +72,8 @@ export async function saveToDB(data: {
 
 export async function loadFromDB(): Promise<{
   elements?: ExcalidrawElement[];
+  pages?: DrawingPage[];
+  activePageId?: string;
   layers?: DrawingLayer[];
   activeLayerId?: string;
   viewport?: Viewport;
@@ -85,8 +91,10 @@ export async function loadFromDB(): Promise<{
     const db = await getDB();
     const tx = db.transaction(STORE_NAME, 'readonly');
     const store = tx.objectStore(STORE_NAME);
-    const [elements, layers, activeLayerId, viewport, theme, appearanceMode, canvasBackground, themeId, canvasPattern, hiddenTools, toolbarOrientation, toolbarPosition, patternOpacity] = await Promise.all([
+    const [elements, pages, activePageId, layers, activeLayerId, viewport, theme, appearanceMode, canvasBackground, themeId, canvasPattern, hiddenTools, toolbarOrientation, toolbarPosition, patternOpacity] = await Promise.all([
       store.get('elements'),
+      store.get('pages'),
+      store.get('activePageId'),
       store.get('layers'),
       store.get('activeLayerId'),
       store.get('viewport'),
@@ -96,7 +104,7 @@ export async function loadFromDB(): Promise<{
       store.get('themeId'),
       store.get('canvasPattern'), store.get('hiddenTools'), store.get('toolbarOrientation'), store.get('toolbarPosition'), store.get('patternOpacity'),
     ]);
-    return { elements, layers, activeLayerId, viewport, theme, appearanceMode, canvasBackground, themeId, canvasPattern, hiddenTools, toolbarOrientation, toolbarPosition, patternOpacity };
+    return { elements, pages, activePageId, layers, activeLayerId, viewport, theme, appearanceMode, canvasBackground, themeId, canvasPattern, hiddenTools, toolbarOrientation, toolbarPosition, patternOpacity };
   } catch (err) {
     console.warn('Failed to load from IndexedDB:', err);
     return {};
@@ -109,6 +117,8 @@ let saveTimeout: ReturnType<typeof setTimeout> | null = null;
 
 export function debouncedSave(data: {
   elements?: ExcalidrawElement[];
+  pages?: DrawingPage[];
+  activePageId?: string;
   layers?: DrawingLayer[];
   activeLayerId?: string;
   viewport?: Viewport;
@@ -137,6 +147,7 @@ export async function exportPNG(elements: ExcalidrawElement[], theme: 'light' | 
   const filtered = elements.filter((el) => !el.isDeleted);
   if (filtered.length === 0) { announceExport({ state:'error', message:'Nothing to export yet.' }); return false; }
   announceExport({ state:'working', message:'Preparing PNG…' });
+  await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 
   // Compute bounding box of all elements
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;

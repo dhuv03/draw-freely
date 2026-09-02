@@ -240,7 +240,8 @@ export function useCanvasEvents(
                 
                 // Create a new vertex at the midpoint
                 const newPoints = [...selEl.points];
-                const newPt: [number, number, number] = [mx - selEl.x, my - selEl.y, 0];
+                const localMidpoint = transformElementPoint(selEl, midpoint, true);
+                const newPt: [number, number, number] = [localMidpoint.x - selEl.x, localMidpoint.y - selEl.y, 0];
                 newPoints.splice(i + 1, 0, newPt);
 
                 dispatch({
@@ -252,6 +253,7 @@ export function useCanvasEvents(
                 p.action = 'vertex_dragging' as any;
                 (p as any).draggedLineId = selEl.id;
                 (p as any).draggedVertexIndex = i + 1;
+                (p as any).pendingLinePoints = newPoints;
                 return;
               }
             }
@@ -329,6 +331,8 @@ export function useCanvasEvents(
           dispatch({ type: 'SET_SELECTION', ids: [] });
         }
         p.action = 'rubberband';
+        (p as any).rubberBandCurrent = { x:cp.x, y:cp.y, width:0, height:0 };
+        (p as any).rubberBandBaseIds = e.shiftKey ? [...s.selectedElementIds] : [];
         return;
       }
 
@@ -530,9 +534,10 @@ export function useCanvasEvents(
         const vertexIdx = (p as any).draggedVertexIndex;
         const el = s.elements.find((e) => e.id === lineId);
         if (el && el.points) {
-          const newPoints = [...el.points];
+          const newPoints = [...((p as any).pendingLinePoints || el.points)];
           const localPoint = transformElementPoint(el, cp, true);
           newPoints[vertexIdx] = [localPoint.x - el.x, localPoint.y - el.y, 0];
+          (p as any).pendingLinePoints = newPoints;
 
           dispatch({
             type: 'UPDATE_ELEMENT',
@@ -686,11 +691,8 @@ export function useCanvasEvents(
           width: cp.x - p.startCanvas.x,
           height: cp.y - p.startCanvas.y,
         };
+        (p as any).rubberBandCurrent = rb;
         forceInteractiveRender(rb);
-
-        // Select elements within rubber band
-        const selected = getElementsInRect(getInteractiveElements(s), rb);
-        dispatch({ type: 'SET_SELECTION', ids: selected.map((el) => el.id) });
         return;
       }
 
@@ -746,6 +748,12 @@ export function useCanvasEvents(
 
       // Clear rubber band
       if (p.action === 'rubberband') {
+        const rb = (p as any).rubberBandCurrent as { x:number; y:number; width:number; height:number } | undefined;
+        if (rb && (Math.abs(rb.width) > 2 || Math.abs(rb.height) > 2)) {
+          const selected = getElementsInRect(getInteractiveElements(stateRef.current), rb).map((element) => element.id);
+          const baseIds = ((p as any).rubberBandBaseIds || []) as string[];
+          dispatch({ type:'SET_SELECTION', ids:[...new Set([...baseIds, ...selected])] });
+        }
         forceInteractiveRender(null);
       }
 
@@ -755,6 +763,9 @@ export function useCanvasEvents(
       p.resizeHandle = null;
       p.movedElements.clear();
       p.hasMoved = false;
+      delete (p as any).rubberBandCurrent;
+      delete (p as any).rubberBandBaseIds;
+      delete (p as any).pendingLinePoints;
     },
     [
       interactiveCanvasRef, activeElementRef, dispatch,
@@ -869,7 +880,7 @@ export function useCanvasEvents(
         e.preventDefault();
         dispatch({
           type: 'SET_SELECTION',
-          ids: s.elements.filter((el) => !el.isDeleted && !el.locked).map((el) => el.id),
+          ids: s.elements.filter((el) => (el.pageId || 'page-1') === s.activePageId && !el.isDeleted && !el.locked).map((el) => el.id),
         });
         dispatch({ type: 'SET_TOOL', tool: 'select' });
         return;
@@ -1146,5 +1157,5 @@ function updateCursor(
 function getInteractiveElements(state: any): ExcalidrawElement[] {
   const available = new Set(state.layers.filter((layer: any) => layer.visible && !layer.locked).map((layer: any) => layer.id));
   const layerOrder = new Map(state.layers.map((layer: any, index: number) => [layer.id, index]));
-  return state.elements.filter((el: ExcalidrawElement) => available.has(el.layerId || 'layer-1')).sort((a: ExcalidrawElement, b: ExcalidrawElement) => Number(layerOrder.get(a.layerId || 'layer-1') || 0) - Number(layerOrder.get(b.layerId || 'layer-1') || 0));
+  return state.elements.filter((el: ExcalidrawElement) => (el.pageId || 'page-1') === state.activePageId && available.has(el.layerId || 'layer-1')).sort((a: ExcalidrawElement, b: ExcalidrawElement) => Number(layerOrder.get(a.layerId || 'layer-1') || 0) - Number(layerOrder.get(b.layerId || 'layer-1') || 0));
 }

@@ -5,6 +5,7 @@ import type { ExcalidrawElement } from '../types';
 
 export function TopBar({ onImport }: { onImport: (elements: ExcalidrawElement[]) => void }) {
   const { state, dispatch } = useAppContext();
+  const pageElements = state.elements.filter((element) => (element.pageId || 'page-1') === state.activePageId);
   const [showExport, setShowExport] = useState(false);
   const exportRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -22,6 +23,6 @@ export function TopBar({ onImport }: { onImport: (elements: ExcalidrawElement[])
     <button className="top-bar-btn" onClick={() => dispatch({ type:'UNDO' })} disabled={!state.history.past.length} aria-label="Undo (Ctrl+Z)"><svg viewBox="0 0 24 24"><path d="M3 7v6h6"/><path d="M5.5 17a9 9 0 1 0 .5-10L3 10"/></svg></button>
     <button className="top-bar-btn" onClick={() => dispatch({ type:'REDO' })} disabled={!state.history.future.length} aria-label="Redo (Ctrl+Shift+Z)"><svg viewBox="0 0 24 24"><path d="M21 7v6h-6"/><path d="M18.5 17a9 9 0 1 1-.5-10l3 3"/></svg></button>
     <div className="top-bar-divider"/>
-    <div ref={exportRef} className="top-export-wrap"><button className="top-bar-btn" onClick={() => setShowExport((open) => !open)} aria-label="Export / Save"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg></button>{showExport && <div className="export-dropdown glass-panel"><button onClick={() => exportPNG(state.elements,state.theme)}>Export PNG</button><button onClick={() => exportSVG(state.elements,state.theme)}>Export SVG</button><button onClick={() => exportJSON(state.elements)}>Save .drawfreely</button><button onClick={importDrawing}>Open drawing</button></div>}</div>
+    <div ref={exportRef} className="top-export-wrap"><button className="top-bar-btn" onClick={() => setShowExport((open) => !open)} aria-label="Export / Save"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg></button>{showExport && <div className="export-dropdown glass-panel"><button onClick={() => exportPNG(pageElements,state.theme)}>Export PNG</button><button onClick={() => exportSVG(pageElements,state.theme)}>Export SVG</button><button onClick={() => exportJSON(pageElements)}>Save .drawfreely</button><button onClick={importDrawing}>Open drawing</button></div>}</div>
   </div>;
 }

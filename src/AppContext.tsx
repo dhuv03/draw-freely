@@ -9,6 +9,8 @@ import { HISTORY_LIMIT, DEFAULT_ELEMENT_PROPS } from './constants';
 // ── Initial State ────────────────────────────
 export const initialState: AppState = {
   elements: [],
+  pages: [{ id:'page-1', name:'Page 1' }],
+  activePageId: 'page-1',
   layers: [{ id: 'layer-1', name: 'Layer 1', visible: true, locked: false }],
   activeLayerId: 'layer-1',
   selectedElementIds: [],
@@ -34,7 +36,7 @@ export const initialState: AppState = {
 export function appReducer(state: AppState, action: AppAction): AppState {
   switch (action.type) {
     case 'ADD_ELEMENT':
-      return { ...state, elements: [...state.elements, { ...action.element, layerId: action.element.layerId || state.activeLayerId }] };
+      return { ...state, elements: [...state.elements, { ...action.element, pageId:action.element.pageId || state.activePageId, layerId: action.element.layerId || state.activeLayerId }] };
 
     case 'UPDATE_ELEMENT':
       return {
@@ -55,6 +57,20 @@ export function appReducer(state: AppState, action: AppAction): AppState {
 
     case 'SET_ELEMENTS':
       return { ...state, elements: action.elements };
+
+    case 'SET_PAGES': {
+      const pages = action.pages.length ? action.pages : [{ id:'page-1', name:'Page 1' }];
+      return { ...state, pages, activePageId:action.activePageId && pages.some((page) => page.id === action.activePageId) ? action.activePageId : pages[0].id, selectedElementIds:[] };
+    }
+    case 'ADD_PAGE': {
+      const id = `page-${Date.now()}`;
+      const pages = [...state.pages, { id, name:`Page ${state.pages.length + 1}` }];
+      return { ...state, pages, activePageId:id, selectedElementIds:[], editingTextId:null, viewport:{ zoom:1, scrollX:0, scrollY:0 } };
+    }
+    case 'SET_ACTIVE_PAGE':
+      return state.pages.some((page) => page.id === action.id) ? { ...state, activePageId:action.id, selectedElementIds:[], editingTextId:null, propertiesOpen:false } : state;
+    case 'RENAME_PAGE':
+      return { ...state, pages:state.pages.map((page) => page.id === action.id ? { ...page, name:action.name } : page) };
 
     case 'SET_LAYERS':
       return { ...state, layers: action.layers, activeLayerId: action.activeLayerId || action.layers[0]?.id || 'layer-1' };
@@ -200,7 +216,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
     case 'CLEAR_CANVAS':
       return {
         ...state,
-        elements: [],
+        elements: state.elements.filter((element) => (element.pageId || 'page-1') !== state.activePageId),
         selectedElementIds: [],
         history: {
           past: [

@@ -41,6 +41,7 @@ export type Tool =
 
 export interface ExcalidrawElement {
   id: string;
+  pageId?: string;
   layerId?: string;
   type: ElementType;
   x: number;
@@ -82,6 +83,7 @@ export interface ExcalidrawElement {
 }
 
 export interface DrawingLayer { id: string; name: string; visible: boolean; locked: boolean; }
+export interface DrawingPage { id: string; name: string; }
 
 export type ElementDefaults = Pick<ExcalidrawElement,
   'strokeColor' | 'fillColor' | 'strokeWidth' | 'strokeStyle' | 'roughness' |
@@ -110,6 +112,8 @@ export interface Bounds {
 
 export interface AppState {
   elements: ExcalidrawElement[];
+  pages: DrawingPage[];
+  activePageId: string;
   layers: DrawingLayer[];
   activeLayerId: string;
   selectedElementIds: string[];
@@ -139,6 +143,10 @@ export type AppAction =
   | { type: 'UPDATE_ELEMENT'; id: string; updates: Partial<ExcalidrawElement> }
   | { type: 'DELETE_ELEMENTS'; ids: string[] }
   | { type: 'SET_ELEMENTS'; elements: ExcalidrawElement[] }
+  | { type: 'SET_PAGES'; pages: DrawingPage[]; activePageId?: string }
+  | { type: 'ADD_PAGE' }
+  | { type: 'SET_ACTIVE_PAGE'; id: string }
+  | { type: 'RENAME_PAGE'; id: string; name: string }
   | { type: 'SET_LAYERS'; layers: DrawingLayer[]; activeLayerId?: string }
   | { type: 'ADD_LAYER' }
   | { type: 'SET_ACTIVE_LAYER'; id: string }

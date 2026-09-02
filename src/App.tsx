@@ -59,8 +59,9 @@ export default function App() {
   // ── Load saved data on mount ───────────────
   useEffect(() => {
     loadFromDB().then((data) => {
+      if (data.pages?.length) dispatch({ type:'SET_PAGES', pages:data.pages, activePageId:data.activePageId });
       if (data.elements && data.elements.length > 0) {
-        dispatch({ type: 'SET_ELEMENTS', elements: data.elements });
+        dispatch({ type: 'SET_ELEMENTS', elements: data.elements.map((element) => ({ ...element, pageId:element.pageId || 'page-1' })) });
       }
       if (data.layers?.length) dispatch({ type: 'SET_LAYERS', layers: data.layers, activeLayerId: data.activeLayerId });
       if (data.viewport) {
@@ -86,6 +87,8 @@ export default function App() {
     if (!hydrated) return;
     debouncedSave({
       elements: state.elements,
+      pages: state.pages,
+      activePageId: state.activePageId,
       layers: state.layers,
       activeLayerId: state.activeLayerId,
       viewport: state.viewport,
@@ -99,7 +102,7 @@ export default function App() {
       toolbarPosition: state.toolbarPosition,
       patternOpacity: state.patternOpacity,
     });
-  }, [hydrated, state.elements, state.layers, state.activeLayerId, state.viewport, state.theme, state.appearanceMode, state.canvasBackground, state.themeId, state.canvasPattern, state.hiddenTools, state.toolbarOrientation, state.toolbarPosition, state.patternOpacity]);
+  }, [hydrated, state.elements, state.pages, state.activePageId, state.layers, state.activeLayerId, state.viewport, state.theme, state.appearanceMode, state.canvasBackground, state.themeId, state.canvasPattern, state.hiddenTools, state.toolbarOrientation, state.toolbarPosition, state.patternOpacity]);
 
   useEffect(() => {
     if (!hydrated || state.appearanceMode !== 'system') return;
@@ -146,9 +149,10 @@ export default function App() {
   const handleImport = useCallback(
     (elements: ExcalidrawElement[]) => {
       dispatch({ type: 'SNAPSHOT' });
-      dispatch({ type: 'SET_ELEMENTS', elements });
+      const otherPages = state.elements.filter((element) => (element.pageId || 'page-1') !== state.activePageId);
+      dispatch({ type: 'SET_ELEMENTS', elements:[...otherPages, ...elements.map((element) => ({ ...element, pageId:state.activePageId }))] });
     },
-    [dispatch],
+    [dispatch, state.activePageId, state.elements],
   );
 
   // ── Capture the interactive canvas DOM element ──

@@ -41,7 +41,7 @@ export const StaticCanvas = forwardRef<StaticCanvasHandle, StaticCanvasProps>(
         canvas.height = height * dpr;
       }
 
-      const { elements, layers, viewport, theme, canvasBackground, canvasPattern, patternOpacity } = stateRef.current;
+      const { elements, activePageId, layers, viewport, theme, canvasBackground, canvasPattern, patternOpacity } = stateRef.current;
       const visibleLayers = new Set(layers.filter((layer) => layer.visible).map((layer) => layer.id));
       const layerOrder = new Map(layers.map((layer, index) => [layer.id, index]));
 
@@ -64,7 +64,7 @@ export const StaticCanvas = forwardRef<StaticCanvasHandle, StaticCanvasProps>(
       const rc = rough.canvas(canvas);
 
       // Render committed elements
-      for (const el of elements.filter((item) => visibleLayers.has(item.layerId || 'layer-1')).sort((a, b) => (layerOrder.get(a.layerId || 'layer-1') || 0) - (layerOrder.get(b.layerId || 'layer-1') || 0))) {
+      for (const el of elements.filter((item) => (item.pageId || 'page-1') === activePageId && visibleLayers.has(item.layerId || 'layer-1')).sort((a, b) => (layerOrder.get(a.layerId || 'layer-1') || 0) - (layerOrder.get(b.layerId || 'layer-1') || 0))) {
         if (el.isDeleted) continue;
         if (el.id === stateRef.current.editingTextId) continue;
         const visibleElement = theme === 'dark' && ['#000000', '#000', '#1e1e1e'].includes(el.strokeColor.toLowerCase())
@@ -88,7 +88,7 @@ export const StaticCanvas = forwardRef<StaticCanvasHandle, StaticCanvasProps>(
     // Re-render when state changes
     useEffect(() => {
       requestAnimationFrame(render);
-    }, [render, state.elements, state.layers, state.viewport, state.theme, state.canvasBackground, state.canvasPattern, state.patternOpacity, state.editingTextId]);
+    }, [render, state.elements, state.activePageId, state.layers, state.viewport, state.theme, state.canvasBackground, state.canvasPattern, state.patternOpacity, state.editingTextId]);
 
     // Handle window resize
     useEffect(() => {

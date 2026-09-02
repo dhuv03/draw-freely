@@ -34,7 +34,7 @@ export const InteractiveCanvas = forwardRef<InteractiveCanvasHandle, object>(
         canvas.height = height * dpr;
       }
 
-      const { elements, layers, selectedElementIds, viewport, theme, editingTextId } = stateRef.current;
+      const { elements, activePageId, layers, selectedElementIds, viewport, theme, editingTextId } = stateRef.current;
       const visibleLayers = new Set(layers.filter((layer) => layer.visible).map((layer) => layer.id));
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -50,7 +50,7 @@ export const InteractiveCanvas = forwardRef<InteractiveCanvasHandle, object>(
       // Draw selection bounding boxes and handles
       if (selectedElementIds.length > 0) {
         const selectedElements = elements.filter((el) =>
-          visibleLayers.has(el.layerId || 'layer-1') && selectedElementIds.includes(el.id) && el.id !== editingTextId && !el.isDeleted,
+          (el.pageId || 'page-1') === activePageId && visibleLayers.has(el.layerId || 'layer-1') && selectedElementIds.includes(el.id) && el.id !== editingTextId && !el.isDeleted,
         );
 
           const selColor = '#3B82F6';
@@ -111,15 +111,13 @@ export const InteractiveCanvas = forwardRef<InteractiveCanvasHandle, object>(
             }
           } else {
             const bounds = getElementUnrotatedBounds(el);
-            if (el.type !== 'text') {
-              drawResizeHandles(ctx, bounds, handleSize, selColor, theme, false, el);
-              const top = transformElementPoint(el, { x:bounds.x + bounds.width / 2, y:bounds.y });
-              const handle = transformElementPoint(el, { x:bounds.x + bounds.width / 2, y:bounds.y - 24 / viewport.zoom });
-              const rx = handle.x, ry = handle.y;
-              ctx.beginPath(); ctx.moveTo(top.x, top.y); ctx.lineTo(rx, ry); ctx.stroke();
-              ctx.fillStyle = theme === 'dark' ? '#1a1a2e' : '#ffffff';
-              ctx.beginPath(); ctx.arc(rx, ry, 6 / viewport.zoom, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-            }
+            drawResizeHandles(ctx, bounds, handleSize, selColor, theme, el.type === 'text', el);
+            const top = transformElementPoint(el, { x:bounds.x + bounds.width / 2, y:bounds.y });
+            const handle = transformElementPoint(el, { x:bounds.x + bounds.width / 2, y:bounds.y - 24 / viewport.zoom });
+            const rx = handle.x, ry = handle.y;
+            ctx.beginPath(); ctx.moveTo(top.x, top.y); ctx.lineTo(rx, ry); ctx.stroke();
+            ctx.fillStyle = theme === 'dark' ? '#1a1a2e' : '#ffffff';
+            ctx.beginPath(); ctx.arc(rx, ry, 6 / viewport.zoom, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
 
             // Draw bend handle for curved arrow
             if (el.type === 'curvedarrow') {
@@ -180,7 +178,7 @@ export const InteractiveCanvas = forwardRef<InteractiveCanvasHandle, object>(
 
     useEffect(() => {
       requestAnimationFrame(render);
-    }, [render, state.selectedElementIds, state.editingTextId, state.elements, state.layers, state.viewport, state.theme]);
+    }, [render, state.selectedElementIds, state.editingTextId, state.elements, state.activePageId, state.layers, state.viewport, state.theme]);
 
     useEffect(() => {
       const onResize = () => requestAnimationFrame(render);

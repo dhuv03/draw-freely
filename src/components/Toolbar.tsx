@@ -27,6 +27,7 @@ const SHAPES: Tool[] = ['rectangle', 'ellipse', 'diamond', 'triangle', 'line', '
 
 export function Toolbar() {
   const { state, dispatch } = useAppContext();
+  const pageElements = state.elements.filter((element) => (element.pageId || 'page-1') === state.activePageId);
   const [showShapes, setShowShapes] = useState(false);
   const [shapeDirection, setShapeDirection] = useState<'above'|'below'|'left'|'right'>('below');
   const [shapePosition, setShapePosition] = useState<CSSProperties>({});
@@ -126,6 +127,6 @@ export function Toolbar() {
     <div className="toolbar-separator toolbar-action-separator" />
     <button className="toolbar-btn toolbar-action" onClick={() => dispatch({ type:'UNDO' })} disabled={!state.history.past.length} aria-label="Undo"><Icon><path d="M3 7v6h6"/><path d="M5.5 17a9 9 0 1 0 .5-10L3 10"/></Icon></button>
     <button className="toolbar-btn toolbar-action" onClick={() => dispatch({ type:'REDO' })} disabled={!state.history.future.length} aria-label="Redo"><Icon><path d="M21 7v6h-6"/><path d="M18.5 17a9 9 0 1 1-.5-10l3 3"/></Icon></button>
-    <button className="toolbar-btn toolbar-action" onClick={() => exportPNG(state.elements, state.theme)} aria-label="Download PNG"><Icon><path d="M12 3v12m0 0 5-5m-5 5-5-5M4 19h16"/></Icon></button>
+    <button className="toolbar-btn toolbar-action" onClick={() => exportPNG(pageElements, state.theme)} aria-label="Download PNG"><Icon><path d="M12 3v12m0 0 5-5m-5 5-5-5M4 19h16"/></Icon></button>
   </div>;
 }

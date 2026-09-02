@@ -5,7 +5,7 @@ import { getElementBounds } from '../renderer/renderElement';
 export function ZoomControls() {
   const { state, dispatch } = useAppContext();
   const contentBounds = () => {
-    const bounds = state.elements.filter((element) => !element.isDeleted).map(getElementBounds);
+    const bounds = state.elements.filter((element) => !element.isDeleted && (element.pageId || 'page-1') === state.activePageId).map(getElementBounds);
     if (!bounds.length) return null;
     const minX = Math.min(...bounds.map((bound) => bound.x));
     const minY = Math.min(...bounds.map((bound) => bound.y));
