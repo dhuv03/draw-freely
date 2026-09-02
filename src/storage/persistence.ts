@@ -146,8 +146,11 @@ export async function exportPNG(elements: ExcalidrawElement[], theme: 'light' | 
   const padding = 40;
   const filtered = elements.filter((el) => !el.isDeleted);
   if (filtered.length === 0) { announceExport({ state:'error', message:'Nothing to export yet.' }); return false; }
+  const statusStartedAt = performance.now();
   announceExport({ state:'working', message:'Preparing PNG…' });
-  await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+  // Let React commit the working state and the browser paint it before doing
+  // synchronous canvas rendering. A timer after rAF runs after that paint.
+  await new Promise<void>((resolve) => requestAnimationFrame(() => window.setTimeout(resolve, 0)));
 
   // Compute bounding box of all elements
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
@@ -191,6 +194,10 @@ export async function exportPNG(elements: ExcalidrawElement[], theme: 'light' | 
 
   try {
     const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob((result) => result ? resolve(result) : reject(new Error('PNG encoding failed')), 'image/png'));
+    const remainingStatusTime = 350 - (performance.now() - statusStartedAt);
+    if (remainingStatusTime > 0) {
+      await new Promise<void>((resolve) => window.setTimeout(resolve, remainingStatusTime));
+    }
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
